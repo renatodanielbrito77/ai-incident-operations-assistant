@@ -1,0 +1,44 @@
+[
+  {
+    "chunk_id": "RB-001-01",
+    "document_id": "RB-001",
+    "source": "docs/runbooks/checkout-payment-timeout.md",
+    "section": "Objetivo",
+    "content": "Orientar a investigação de incidentes não-P1 relacionados à lentidão ou a erros na comunicação entre a aplicação `checkout` e o serviço de pagamentos.\n\nEste documento e seus limiares são fictícios, criados para a POC. Não representam procedimentos validados de produção."
+  },
+  {
+    "chunk_id": "RB-001-02",
+    "document_id": "RB-001",
+    "source": "docs/runbooks/checkout-payment-timeout.md",
+    "section": "Sintomas",
+    "content": "Este runbook pode ser relevante quando houver um ou mais destes sinais:\n\n- Log de nível `ERROR` com a mensagem `Timeout while connecting to payment service`.\n- Log de nível `WARN` com a mensagem `Payment request exceeded latency threshold`.\n- Monitoring da aplicação `checkout` com status `degraded`.\n- Taxa de erros acima de 5%.\n- Latência p95 acima de 1.000 ms.\n\nOs limiares de 5% e 1.000 ms são regras fictícias deste exercício. Um sinal isolado não comprova a causa do incidente."
+  },
+  {
+    "chunk_id": "RB-001-03",
+    "document_id": "RB-001",
+    "source": "docs/runbooks/checkout-payment-timeout.md",
+    "section": "Verificações",
+    "content": "Antes de recomendar uma ação, o operador deve:\n\n1. Confirmar que o incidente pertence à aplicação `checkout` e não é P1.\n2. Conferir se os logs e as métricas correspondem ao período do incidente.\n3. Verificar se os timeouts se repetem ou representam um evento isolado.\n4. Comparar a taxa de erros e a latência com períodos anteriores.\n5. Verificar a saúde do serviço de pagamentos, caso essa informação esteja disponível.\n6. Consultar incidentes históricos semelhantes, quando houver acesso a esses dados.\n\nSe não houver informações suficientes, registrar quais dados faltam. Não presumir que o serviço de pagamentos está indisponível apenas porque o checkout registrou um timeout."
+  },
+  {
+    "chunk_id": "RB-001-04",
+    "document_id": "RB-001",
+    "source": "docs/runbooks/checkout-payment-timeout.md",
+    "section": "Orientações",
+    "content": "### Acompanhar a evolução\n\nQuando houver um evento isolado e as métricas estiverem se recuperando, recomendar acompanhamento da taxa de erros, da latência e da ocorrência de novos timeouts.\n\n### Investigar a dependência de pagamentos\n\nQuando houver timeouts recorrentes acompanhados de degradação das métricas, recomendar a consulta ao monitoring e aos logs do serviço de pagamentos.\n\nSe esses dados não estiverem disponíveis, informar a limitação e solicitar sua verificação pelo responsável.\n\n### Escalar para um responsável\n\nQuando a degradação persistir ou houver evidência de impacto nas transações, recomendar avaliação pelo responsável por checkout e, conforme as evidências, pelo responsável pelo serviço de pagamentos.\n\nA recomendação deve incluir os sinais observados e as verificações ainda pendentes."
+  },
+  {
+    "chunk_id": "RB-001-05",
+    "document_id": "RB-001",
+    "source": "docs/runbooks/checkout-payment-timeout.md",
+    "section": "Limites",
+    "content": "- Este runbook não se aplica a incidentes P1, que devem seguir o fluxo de escalonamento manual da POC.\n- Não autoriza reinícios, alterações de configuração, reprocessamento de pagamentos ou outras mudanças automáticas.\n- Não permite concluir a causa raiz somente a partir das mensagens de timeout.\n- Ausência de logs não comprova ausência de falha.\n- Dados ausentes ou fora do período do incidente devem ser explicitados como limitações."
+  },
+  {
+    "chunk_id": "RB-001-06",
+    "document_id": "RB-001",
+    "source": "docs/runbooks/checkout-payment-timeout.md",
+    "section": "Evidências esperadas na recomendação",
+    "content": "Uma recomendação baseada neste runbook deve apresentar:\n\n- Identificador do incidente e aplicação afetada.\n- Mensagens de log relevantes.\n- Taxa de erros, latência p95 e status observados.\n- Relação entre as evidências e a orientação escolhida.\n- Dados faltantes e verificações pendentes.\n- Referência ao documento `RB-001`."
+  }
+]
