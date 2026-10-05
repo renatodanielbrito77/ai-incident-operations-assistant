@@ -163,7 +163,7 @@ Outras falhas, como respostas HTTP inesperadas do Mock Services ou dados incompa
 - A aplicação coleta contexto; ainda não analisa causas nem recomenda ações.
 - P1 gera apenas uma indicação de escalonamento manual.
 - Ainda não há LLM, RAG, Vector DB ou busca de incidentes históricos.
-- Ainda não há Docker Compose, audit ou evals.
+- Implementado ! *** Ainda não há Docker Compose, audit ou evals.
 - Não há integração com AWS ou Kubernetes.
 
 ## Etapas futuras
@@ -171,3 +171,33 @@ Outras falhas, como respostas HTTP inesperadas do Mock Services ou dados incompa
 A evolução será incremental: Docker Compose local, documentação fictícia, chunking, embeddings, Vector DB/RAG, incidentes históricos semelhantes, LLM, guardrails, audit e evals.
 
 Posteriormente, será feita a comparação entre workflow determinístico e abordagem agentic.
+
+
+
+v02
+
+## Executar com Docker Compose
+
+Com Docker Desktop iniciado, execute na raiz do projeto:
+
+```bash
+docker compose up --build
+```
+
+Serviços disponíveis:
+
+- AI App: http://localhost:8000/docs
+- Mock Services: http://localhost:8001/docs
+
+Dentro da rede do Compose, o AI App consulta o Mock Services em
+`http://mock-services:8000`, configurado pela variável `MOCK_SERVICES_URL`.
+
+Para encerrar, pressione Ctrl+C. Para remover os containers e a rede
+do projeto, execute:
+
+```bash
+docker compose down
+```
+
+Após alterar o código, execute novamente `docker compose up --build`
+para reconstruir as imagens.

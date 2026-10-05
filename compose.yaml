@@ -1,0 +1,14 @@
+services:
+  mock-services:
+    build: ./mock-services
+    ports:
+      - "127.0.0.1:8001:8000"
+
+  ai-app:
+    build: ./ai-app
+    ports:
+      - "127.0.0.1:8000:8000"
+    environment:
+      MOCK_SERVICES_URL: "http://mock-services:8000"
+    depends_on:
+      - mock-services

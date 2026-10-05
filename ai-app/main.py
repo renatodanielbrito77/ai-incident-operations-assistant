@@ -1,9 +1,10 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import httpx
+import os
 
 app = FastAPI()
-MOCK_SERVICES_URL = "http://localhost:8001"
+MOCK_SERVICES_URL = os.getenv("MOCK_SERVICES_URL", "http://localhost:8001")
 
 class Incident(BaseModel):
     incident_id: str
