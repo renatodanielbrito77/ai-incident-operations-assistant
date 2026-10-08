@@ -2,6 +2,8 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import httpx
 import os
+from search_qdrant import search_chunks
+from starlette.concurrency import run_in_threadpool
 
 app = FastAPI()
 MOCK_SERVICES_URL = os.getenv("MOCK_SERVICES_URL", "http://localhost:8001")
@@ -27,10 +29,15 @@ class ApplicationLogs(BaseModel):
     application: str
     entries: list[LogEntry]
 
+class RetrievedDocument(BaseModel):
+    score: float
+    chunk: dict
+
 class InvestigationContext(BaseModel):
     incident: Incident
     monitoring: Monitoring
     logs: ApplicationLogs
+    documentation: list[RetrievedDocument]
 
 class EscalationResponse(BaseModel):
     incident: Incident
@@ -132,8 +139,17 @@ async def investigate(incident_id: str):
     logs_response.raise_for_status()
     logs_data = logs_response.json()
 
+    query = (
+        f'Aplicação: {incident_data["application"]}. '
+        f'Incidente: {incident_data["summary"]}. '
+        + " ".join(entry["message"] for entry in logs_data["entries"])
+    )
+
+    documentation = await run_in_threadpool(search_chunks, query)
+
     return {
         "incident": incident_data,
         "monitoring": monitoring_data,
         "logs": logs_data,
+        "documentation": documentation,
     }

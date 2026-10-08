@@ -10,8 +10,10 @@ services:
       - "127.0.0.1:8000:8000"
     environment:
       MOCK_SERVICES_URL: "http://mock-services:8000"
+      QDRANT_URL: "http://vector-db:6333"
     depends_on:
       - mock-services
+      - vector-db
 
   vector-db:
     image: qdrant/qdrant
@@ -22,4 +24,3 @@ services:
 
 volumes:
   qdrant-data:
-  
