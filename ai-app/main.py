@@ -30,9 +30,17 @@ class ApplicationLogs(BaseModel):
     application: str
     entries: list[LogEntry]
 
+class RunbookChunk(BaseModel):
+    chunk_id: str
+    document_id: str
+    source: str
+    section: str
+    subsection: str | None = None
+    content: str
+
 class RetrievedDocument(BaseModel):
     score: float
-    chunk: dict
+    chunk: RunbookChunk
 
 class InvestigationContext(BaseModel):
     incident: Incident
