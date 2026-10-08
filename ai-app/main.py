@@ -4,6 +4,7 @@ import httpx
 import os
 from search_qdrant import search_chunks
 from starlette.concurrency import run_in_threadpool
+from qdrant_client.http.exceptions import ResponseHandlingException
 
 app = FastAPI()
 MOCK_SERVICES_URL = os.getenv("MOCK_SERVICES_URL", "http://localhost:8001")
@@ -48,96 +49,75 @@ class EscalationResponse(BaseModel):
 def health():
     return {"service": "ai-app", "status": "ok"} 
 
-@app.post("/investigate/{incident_id}", 
-          response_model=InvestigationContext | EscalationResponse,)
-
+@app.post(
+    "/investigate/{incident_id}",
+    response_model=InvestigationContext | EscalationResponse,
+)
 async def investigate(incident_id: str):
-
     try:
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=5.0) as client:
             incident_response = await client.get(
-                f"{MOCK_SERVICES_URL}/incidents/{incident_id}",
-                timeout=5.0,
+                f"{MOCK_SERVICES_URL}/incidents/{incident_id}"
             )
-    except httpx.ConnectError as exc:
-        raise HTTPException(
-            status_code=503,
-            detail=f"Service unavailable: {exc}",
-        )
-    except httpx.TimeoutException as exc:
-        raise HTTPException(
-            status_code=504,
-            detail="Mock Services não respondeu dentro do tempo limite",
-        ) from exc
 
-    if incident_response.status_code == 404:
-        raise HTTPException(
-            status_code=404,
-            detail="Incident not found",
-        )
+            if incident_response.status_code == 404:
+                raise HTTPException(
+                    status_code=404,
+                    detail="Incident not found",
+                )
 
-    incident_response.raise_for_status()
-    incident_data = incident_response.json()
-    application = incident_data["application"]
+            incident_response.raise_for_status()
+            incident_data = incident_response.json()
 
-    if (incident_data["priority"] == "P1"):
-        return {
-            "incident": incident_data,
-            "status": "manual_escalation_required",
-            "reason": "Incidente P1 exige tratamento humano; investigação automática interrompida.",
-        }
+            if incident_data["priority"] == "P1":
+                return {
+                    "incident": incident_data,
+                    "status": "manual_escalation_required",
+                    "reason": (
+                        "Incidente P1 exige tratamento humano; "
+                        "investigação automática interrompida."
+                    ),
+                }
 
-    try:
-        async with httpx.AsyncClient() as client:
+            application = incident_data["application"]
+
             monitoring_response = await client.get(
-                f"{MOCK_SERVICES_URL}/monitoring/{application}",
-                timeout=5.0,
+                f"{MOCK_SERVICES_URL}/monitoring/{application}"
             )
-    except httpx.ConnectError as exc:
-        raise HTTPException(
-            status_code=503,
-            detail=f"Service unavailable: {exc}",
-        )
-    except httpx.TimeoutException as exc:
-        raise HTTPException(
-            status_code=504,
-            detail="Mock Services não respondeu dentro do tempo limite",
-        ) from exc
 
-    if monitoring_response.status_code == 404:
-        raise HTTPException(
-            status_code=404,
-            detail="Monitoring data not found",
-        )
+            if monitoring_response.status_code == 404:
+                raise HTTPException(
+                    status_code=404,
+                    detail="Monitoring data not found",
+                )
 
-    monitoring_response.raise_for_status()
-    monitoring_data = monitoring_response.json()
+            monitoring_response.raise_for_status()
+            monitoring_data = monitoring_response.json()
 
-    try:
-        async with httpx.AsyncClient() as client:
             logs_response = await client.get(
-                f"{MOCK_SERVICES_URL}/logs/{application}",
-                timeout=5.0,
+                f"{MOCK_SERVICES_URL}/logs/{application}"
             )
-    except httpx.ConnectError as exc:
-        raise HTTPException(
-            status_code=503,
-            detail=f"Service unavailable: {exc}",
-        )
+
+            if logs_response.status_code == 404:
+                raise HTTPException(
+                    status_code=404,
+                    detail="Logs not found",
+                )
+
+            logs_response.raise_for_status()
+            logs_data = logs_response.json()
+
     except httpx.TimeoutException as exc:
         raise HTTPException(
             status_code=504,
             detail="Mock Services não respondeu dentro do tempo limite",
         ) from exc
-            
-    if logs_response.status_code == 404:
-        raise HTTPException(
-            status_code=404,
-            detail="Logs not found",
-        )
 
-    logs_response.raise_for_status()
-    logs_data = logs_response.json()
+    except httpx.ConnectError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Falha na conexão com Mock Services",
+        ) from exc
 
     query = (
         f'Aplicação: {incident_data["application"]}. '
@@ -145,7 +125,13 @@ async def investigate(incident_id: str):
         + " ".join(entry["message"] for entry in logs_data["entries"])
     )
 
-    documentation = await run_in_threadpool(search_chunks, query)
+    try:
+        documentation = await run_in_threadpool(search_chunks, query)
+    except ResponseHandlingException as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Falha na comunicação com a base documental",
+        ) from exc
 
     return {
         "incident": incident_data,
