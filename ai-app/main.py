@@ -5,6 +5,7 @@ import os
 from search_qdrant import search_chunks, get_document_limits
 from starlette.concurrency import run_in_threadpool
 from qdrant_client.http.exceptions import ResponseHandlingException
+from context_rules import evaluate_context
 
 app = FastAPI()
 MOCK_SERVICES_URL = os.getenv("MOCK_SERVICES_URL", "http://localhost:8001")
@@ -49,6 +50,8 @@ class InvestigationContext(BaseModel):
     documentation: list[RetrievedDocument]
     document_limits: list[RunbookChunk]
     documentation_status: str
+    analysis_status: str
+    analysis_reason: str
     
 class EscalationResponse(BaseModel):
     incident: Incident
@@ -162,6 +165,20 @@ async def investigate(incident_id: str):
         "retrieved" if documentation else "no_matches"
     )
 
+    retrieved_document_ids = {
+        item["chunk"]["document_id"] 
+        for item in documentation
+    }
+
+    limits_document_ids = {
+        chunk["document_id"] 
+        for chunk in document_limits
+    }
+
+    missing_limits = retrieved_document_ids - limits_document_ids
+
+    decision = evaluate_context(documentation, document_limits)
+
     return {
         "incident": incident_data,
         "monitoring": monitoring_data,
@@ -169,4 +186,6 @@ async def investigate(incident_id: str):
         "documentation": documentation,
         "document_limits": document_limits,
         "documentation_status": documentation_status,
+        "analysis_status": decision["analysis_status"],
+        "analysis_reason": decision["analysis_reason"],
     }

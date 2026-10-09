@@ -9,4 +9,6 @@ COPY main.py .
 
 COPY search_qdrant.py .
 
+COPY context_rules.py .
+
 CMD ["python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
