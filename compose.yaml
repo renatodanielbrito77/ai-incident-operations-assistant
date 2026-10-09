@@ -11,6 +11,9 @@ services:
     environment:
       MOCK_SERVICES_URL: "http://mock-services:8000"
       QDRANT_URL: "http://vector-db:6333"
+      AUDIT_PATH: "/app/audit/events.jsonl"
+    volumes:
+      - audit-data:/app/audit
     depends_on:
       - mock-services
       - vector-db
@@ -24,3 +27,4 @@ services:
 
 volumes:
   qdrant-data:
+  audit-data:

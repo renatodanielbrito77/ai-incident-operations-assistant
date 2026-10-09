@@ -7,9 +7,12 @@ from starlette.concurrency import run_in_threadpool
 from qdrant_client.http.exceptions import ResponseHandlingException
 from context_rules import evaluate_context
 from typing import Literal
+from audit import build_audit_event, append_audit_event
+from pathlib import Path
 
 app = FastAPI()
 MOCK_SERVICES_URL = os.getenv("MOCK_SERVICES_URL", "http://localhost:8001")
+AUDIT_PATH = Path(os.getenv("AUDIT_PATH", "/app/audit/events.jsonl"))
 
 class Incident(BaseModel):
     incident_id: str
@@ -64,6 +67,20 @@ class EscalationResponse(BaseModel):
     status: Literal["manual_escalation_required"]
     reason: str
 
+
+async def persist_audit_event(event: dict):
+    try:
+        await run_in_threadpool(
+            append_audit_event,
+            event,
+            AUDIT_PATH,
+        )
+    except OSError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Não foi possível registrar a investigação no audit",
+        ) from exc
+
 @app.get("/health")
 def health():
     return {"service": "ai-app", "status": "ok"} 
@@ -89,6 +106,16 @@ async def investigate(incident_id: str):
             incident_data = incident_response.json()
 
             if incident_data["priority"] == "P1":
+
+                audit_event = build_audit_event(
+                    incident_id=incident_data["incident_id"],
+                    analysis_code="P1_MANUAL_ESCALATION",
+                    retrieved_chunk_ids=[],
+                    limit_chunk_ids=[],
+                )
+
+                await persist_audit_event(audit_event)
+
                 return {
                     "incident": incident_data,
                     "status": "manual_escalation_required",
@@ -184,6 +211,21 @@ async def investigate(incident_id: str):
     missing_limits = retrieved_document_ids - limits_document_ids
 
     decision = evaluate_context(documentation, document_limits)
+
+    audit_event = build_audit_event(
+        incident_id=incident_data["incident_id"],
+        analysis_code=decision["analysis_code"],
+        retrieved_chunk_ids=[
+            item["chunk"]["chunk_id"] 
+            for item in documentation
+        ],
+        limit_chunk_ids=[
+            chunk["chunk_id"]
+            for chunk in document_limits
+        ],
+    )
+
+    await persist_audit_event(audit_event)
 
     return {
         "incident": incident_data,
