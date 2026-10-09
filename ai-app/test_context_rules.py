@@ -19,4 +19,20 @@ assert (
     == "context_ready"
 )
 
-print("Os três cenários passaram.")
+two_documents = [
+    {"chunk": {"document_id": "RB-001"}},
+    {"chunk": {"document_id": "RB-002"}},
+]
+
+partial_limits = [
+    {"document_id": "RB-001"}
+]
+
+decision = evaluate_context(two_documents, partial_limits)
+
+assert decision["analysis_status"] == "abstained"
+assert decision["analysis_reason"] == (
+    "Limites não encontrados para os documentos: RB-002"
+)
+
+print("Todos os cenários passaram.")

@@ -6,6 +6,7 @@ from search_qdrant import search_chunks, get_document_limits
 from starlette.concurrency import run_in_threadpool
 from qdrant_client.http.exceptions import ResponseHandlingException
 from context_rules import evaluate_context
+from typing import Literal
 
 app = FastAPI()
 MOCK_SERVICES_URL = os.getenv("MOCK_SERVICES_URL", "http://localhost:8001")
@@ -49,13 +50,13 @@ class InvestigationContext(BaseModel):
     logs: ApplicationLogs
     documentation: list[RetrievedDocument]
     document_limits: list[RunbookChunk]
-    documentation_status: str
-    analysis_status: str
+    documentation_status: Literal["retrieved", "no_matches"]
+    analysis_status: Literal["context_ready", "abstained"]
     analysis_reason: str
     
 class EscalationResponse(BaseModel):
     incident: Incident
-    status: str
+    status: Literal["manual_escalation_required"]
     reason: str
 
 @app.get("/health")
