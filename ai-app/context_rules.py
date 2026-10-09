@@ -2,6 +2,7 @@ def evaluate_context(documentation: list, document_limits: list):
     if not documentation:
         return {
             "analysis_status": "abstained",
+            "analysis_code": "NO_DOCUMENTATION",
             "analysis_reason": (
                 "Nenhum trecho atingiu o limiar de recuperação; "
                 "recomendação baseada em runbook não será gerada."
@@ -23,6 +24,7 @@ def evaluate_context(documentation: list, document_limits: list):
     if missing_limits:
         return {
             "analysis_status": "abstained",
+            "analysis_code": "MISSING_DOCUMENT_LIMITS",
             "analysis_reason": (
                 "Limites não encontrados para os documentos: "
                 + ", ".join(sorted(missing_limits))
@@ -31,6 +33,7 @@ def evaluate_context(documentation: list, document_limits: list):
 
     return {
         "analysis_status": "context_ready",
+        "analysis_code": "CONTEXT_READY",
         "analysis_reason": (
             "Contexto coletado com documentação e limites recuperados; "
             "nenhuma recomendação foi gerada."

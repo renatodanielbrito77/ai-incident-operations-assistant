@@ -53,6 +53,11 @@ class InvestigationContext(BaseModel):
     documentation_status: Literal["retrieved", "no_matches"]
     analysis_status: Literal["context_ready", "abstained"]
     analysis_reason: str
+    analysis_code: Literal[
+        "NO_DOCUMENTATION",
+        "MISSING_DOCUMENT_LIMITS",
+        "CONTEXT_READY",
+    ]
     
 class EscalationResponse(BaseModel):
     incident: Incident
@@ -189,4 +194,5 @@ async def investigate(incident_id: str):
         "documentation_status": documentation_status,
         "analysis_status": decision["analysis_status"],
         "analysis_reason": decision["analysis_reason"],
+        "analysis_code": decision["analysis_code"],
     }
