@@ -163,6 +163,15 @@ async def investigate(incident_id: str):
             logs_data = logs_response.json()
 
     except httpx.TimeoutException as exc:
+        audit_event = build_audit_event(
+            incident_id=incident_id,
+            analysis_code="MOCK_SERVICES_TIMEOUT",
+            retrieved_chunk_ids=[],
+            limit_chunk_ids=[],
+        )
+
+        await persist_audit_event(audit_event)
+
         raise HTTPException(
             status_code=504,
             detail="Mock Services não respondeu dentro do tempo limite",
@@ -207,6 +216,15 @@ async def investigate(incident_id: str):
             document_limits.extend(limits)
 
     except ResponseHandlingException as exc:
+        audit_event = build_audit_event(
+            incident_id=incident_id,
+            analysis_code="DOCUMENT_BASE_COMMUNICATION_FAILED",
+            retrieved_chunk_ids=[],
+            limit_chunk_ids=[],
+        )
+
+        await persist_audit_event(audit_event)
+
         raise HTTPException(
             status_code=503,
             detail="Falha na comunicação com a base documental",
