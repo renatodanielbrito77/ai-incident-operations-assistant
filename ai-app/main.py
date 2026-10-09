@@ -97,6 +97,15 @@ async def investigate(incident_id: str):
             )
 
             if incident_response.status_code == 404:
+                audit_event = build_audit_event(
+                    incident_id=incident_id,
+                    analysis_code="INCIDENT_NOT_FOUND",
+                    retrieved_chunk_ids=[],
+                    limit_chunk_ids=[],
+                )
+
+                await persist_audit_event(audit_event)
+
                 raise HTTPException(
                     status_code=404,
                     detail="Incident not found",
