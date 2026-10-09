@@ -169,6 +169,15 @@ async def investigate(incident_id: str):
         ) from exc
 
     except httpx.ConnectError as exc:
+        audit_event = build_audit_event(
+            incident_id=incident_id,
+            analysis_code="MOCK_SERVICES_CONNECTION_FAILED",
+            retrieved_chunk_ids=[],
+            limit_chunk_ids=[],
+        )
+
+        await persist_audit_event(audit_event)
+
         raise HTTPException(
             status_code=503,
             detail="Falha na conexão com Mock Services",
