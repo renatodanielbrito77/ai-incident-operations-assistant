@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import httpx
 import os
-from search_qdrant import search_chunks
+from search_qdrant import search_chunks, get_document_limits
 from starlette.concurrency import run_in_threadpool
 from qdrant_client.http.exceptions import ResponseHandlingException
 
@@ -47,6 +47,7 @@ class InvestigationContext(BaseModel):
     monitoring: Monitoring
     logs: ApplicationLogs
     documentation: list[RetrievedDocument]
+    document_limits: list[RunbookChunk]
 
 class EscalationResponse(BaseModel):
     incident: Incident
@@ -135,6 +136,21 @@ async def investigate(incident_id: str):
 
     try:
         documentation = await run_in_threadpool(search_chunks, query)
+
+        document_ids = {
+            result["chunk"]["document_id"]
+            for result in documentation
+        }
+
+        document_limits = []
+
+        for document_id in sorted(document_ids):
+            limits = await run_in_threadpool(
+                get_document_limits,
+                document_id,
+            )
+            document_limits.extend(limits)
+
     except ResponseHandlingException as exc:
         raise HTTPException(
             status_code=503,
@@ -146,4 +162,5 @@ async def investigate(incident_id: str):
         "monitoring": monitoring_data,
         "logs": logs_data,
         "documentation": documentation,
+        "document_limits": document_limits,
     }
