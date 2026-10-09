@@ -48,7 +48,8 @@ class InvestigationContext(BaseModel):
     logs: ApplicationLogs
     documentation: list[RetrievedDocument]
     document_limits: list[RunbookChunk]
-
+    documentation_status: str
+    
 class EscalationResponse(BaseModel):
     incident: Incident
     status: str
@@ -157,10 +158,15 @@ async def investigate(incident_id: str):
             detail="Falha na comunicação com a base documental",
         ) from exc
 
+    documentation_status = (
+        "retrieved" if documentation else "no_matches"
+    )
+
     return {
         "incident": incident_data,
         "monitoring": monitoring_data,
         "logs": logs_data,
         "documentation": documentation,
         "document_limits": document_limits,
+        "documentation_status": documentation_status,
     }

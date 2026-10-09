@@ -14,7 +14,13 @@ incidents = {
         "application": "checkout",
         "priority": "P1",
         "summary": "Checkout indisponível",
-    }
+    },
+    "INC-003": {
+        "incident_id": "INC-003",
+        "application": "identity",
+        "priority": "P2",
+        "summary": "Usuário não consegue recuperar a senha",
+    },
 }
 
 monitoring = {
@@ -23,7 +29,14 @@ monitoring = {
         "status": "degraded",
         "error_rate_percent": 12.5,
         "latency_p95_ms": 1800,
-    }
+    },
+    # No dicionário monitoring:
+    "identity": {
+        "application": "identity",
+        "status": "degraded",
+        "error_rate_percent": 8.0,
+        "latency_p95_ms": 250.0,
+    },
 }
 
 logs = {
@@ -41,7 +54,17 @@ logs = {
                 "message": "Payment request exceeded latency threshold",
             },
         ],
-    }
+    },
+    "identity": {
+        "application": "identity",
+        "entries": [
+            {
+                "timestamp": "2026-10-08T18:00:00Z",
+                "level": "ERROR",
+                "message": "Password reset email delivery failed",
+            }
+        ],
+    },
 }
 
 @app.get("/health")
