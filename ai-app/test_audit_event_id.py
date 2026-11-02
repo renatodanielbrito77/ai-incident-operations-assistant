@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, Mock, call, patch
 
 import httpx
 from fastapi.testclient import TestClient
+from qdrant_client.http.exceptions import ResponseHandlingException
 
 
 class AuditEventIdTest(unittest.TestCase):
@@ -58,6 +59,7 @@ class AuditEventIdTest(unittest.TestCase):
     def request(
         self, priority="P2", incident_id="INC-001", missing=False,
         application="checkout", history_error=None,
+        http_failure=None,
     ):
         payloads = [
             {
@@ -91,6 +93,9 @@ class AuditEventIdTest(unittest.TestCase):
         ]
         if history_error is not None:
             responses[1] = history_error
+        if http_failure is not None:
+            index, error = http_failure
+            responses[index] = error
         self.http = AsyncMock()
         self.http.__aenter__.return_value = self.http
         self.http.get.side_effect = responses
@@ -122,6 +127,10 @@ class AuditEventIdTest(unittest.TestCase):
         self.assertEqual(event["incident_id"], incident_id)
         self.assertEqual(event["analysis_code"], code)
         self.assertEqual(event["stage"], stage)
+        self.assertEqual(event["historical_incident_ids"], [
+            record["historical_incident_id"]
+            for record in response.json().get("historical_incidents", [])
+        ])
 
     def test_context_ready(self):
         response = self.request()
@@ -187,6 +196,7 @@ class AuditEventIdTest(unittest.TestCase):
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.json(), {"detail": "Incident not found"})
         self.assertNotIn("audit_event_id", response.json())
+        self.assertEqual(self.append.call_args.args[0]["historical_incident_ids"], [])
         self.assertEqual(self.http.get.await_count, 1)
         self.search.assert_not_called()
         self.limits.assert_not_called()
@@ -200,6 +210,7 @@ class AuditEventIdTest(unittest.TestCase):
         event = json.loads(lines[0])
         self.assertEqual(response.json()["audit_event_id"], event["event_id"])
         self.assertEqual(event, self.append.call_args.args[0])
+        self.assertEqual(event["historical_incident_ids"], ["HIST-001", "HIST-002"])
 
     def test_identity_history_without_documentation(self):
         self.search.return_value = []
@@ -239,9 +250,106 @@ class AuditEventIdTest(unittest.TestCase):
                 self.assertEqual(event["incident_id"], "INC-001")
                 self.assertEqual(event["analysis_code"], code)
                 self.assertEqual(event["stage"], "historical_incidents_lookup")
+                self.assertEqual(event["historical_incident_ids"], [])
                 self.assertEqual(self.http.get.await_count, 2)
                 self.search.assert_not_called()
                 self.limits.assert_not_called()
+
+    def test_documentation_search_failure(self):
+        self.search.side_effect = ResponseHandlingException(
+            RuntimeError("Falha documental simulada")
+        )
+        response = self.request()
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.json(), {
+            "detail": "Falha na comunicação com a base documental"
+        })
+        event = self.append.call_args.args[0]
+        self.assertEqual(event["incident_id"], "INC-001")
+        self.assertEqual(event["analysis_code"], "DOCUMENT_BASE_COMMUNICATION_FAILED")
+        self.assertEqual(event["stage"], "documentation_search")
+        self.assertEqual(event["historical_incident_ids"], ["HIST-001", "HIST-002"])
+        self.assertEqual(event["retrieved_chunk_ids"], [])
+        self.assertEqual(event["limit_chunk_ids"], [])
+        self.assertEqual(self.http.get.await_count, 4)
+        self.search.assert_called_once()
+        self.limits.assert_not_called()
+
+    def test_mock_services_communication_failure_matrix(self):
+        base = self.main.MOCK_SERVICES_URL
+        calls = [
+            call(f"{base}/incidents/INC-001"),
+            call(f"{base}/historical-incidents", params={"application": "checkout"}),
+            call(f"{base}/monitoring/checkout"),
+            call(f"{base}/logs/checkout"),
+        ]
+        stages = [(0, "incident_lookup"), (2, "monitoring_lookup"), (3, "logs_lookup")]
+        failures = [
+            (httpx.ConnectError, 503, "MOCK_SERVICES_CONNECTION_FAILED",
+             "Falha na conexão com Mock Services"),
+            (httpx.ReadTimeout, 504, "MOCK_SERVICES_TIMEOUT",
+             "Mock Services não respondeu dentro do tempo limite"),
+        ]
+        for index, stage in stages:
+            for error_type, status, code, detail in failures:
+                with self.subTest(stage=stage, error=error_type.__name__):
+                    self.append = Mock()
+                    response = self.request(http_failure=(
+                        index, error_type("Falha simulada")
+                    ))
+                    self.assertEqual(response.status_code, status)
+                    self.assertEqual(response.json(), {"detail": detail})
+                    event = self.append.call_args.args[0]
+                    self.assertEqual(event["incident_id"], "INC-001")
+                    self.assertEqual(event["analysis_code"], code)
+                    self.assertEqual(event["stage"], stage)
+                    self.assertEqual(
+                        event["historical_incident_ids"],
+                        [] if index == 0 else ["HIST-001", "HIST-002"],
+                    )
+                    self.assertEqual(event["retrieved_chunk_ids"], [])
+                    self.assertEqual(event["limit_chunk_ids"], [])
+                    self.assertEqual(self.http.get.await_args_list, calls[:index + 1])
+                    self.search.assert_not_called()
+                    self.limits.assert_not_called()
+
+    def test_multiple_documents_with_partial_limits(self):
+        second_chunk = {
+            **self.chunk, "document_id": "RB-002", "chunk_id": "RB-002-02-01"
+        }
+        # Resultado fora de ordem e dois trechos do mesmo documento:
+        # deve consultar os limites de cada documento apenas uma vez.
+        self.search.return_value = [
+            {"score": 0.9, "chunk": second_chunk},
+            {"score": 0.8, "chunk": self.chunk},
+            {"score": 0.7, "chunk": {**self.chunk, "chunk_id": "RB-001-03-01"}},
+        ]
+        available_limits = [
+            {**self.chunk, "chunk_id": "RB-001-05", "section": "Limites"}
+        ]
+        self.limits.side_effect = lambda document_id: (
+            available_limits if document_id == "RB-001" else []
+        )
+        response = self.request()
+        self.assert_correlation(
+            response, "MISSING_DOCUMENT_LIMITS", "context_evaluation"
+        )
+        body = response.json()
+        self.assertEqual(body["analysis_status"], "abstained")
+        self.assertEqual(body["analysis_code"], "MISSING_DOCUMENT_LIMITS")
+        self.assertEqual(body["analysis_reason"],
+                         "Limites não encontrados para os documentos: RB-002")
+        self.assertEqual(body["documentation_status"], "retrieved")
+        self.assertEqual(body["document_limits"], [
+            {**available_limits[0], "subsection": None}
+        ])
+        self.assertEqual(body["historical_incidents"], self.histories[:2])
+        self.assertEqual(self.limits.call_args_list, [call("RB-001"), call("RB-002")])
+        event = self.append.call_args.args[0]
+        self.assertEqual(event["retrieved_chunk_ids"], [
+            "RB-002-02-01", "RB-001-02-01", "RB-001-03-01"
+        ])
+        self.assertEqual(event["limit_chunk_ids"], ["RB-001-05"])
 
 
 if __name__ == "__main__":

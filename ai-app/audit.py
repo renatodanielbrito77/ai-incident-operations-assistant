@@ -10,6 +10,7 @@ def build_audit_event(
     retrieved_chunk_ids: list[str],
     limit_chunk_ids: list[str],
     stage: str = "unspecified",
+    historical_incident_ids: list[str] | None = None,
 ):
     return {
         "event_id": str(uuid4()),
@@ -19,6 +20,9 @@ def build_audit_event(
         "retrieved_chunk_ids": retrieved_chunk_ids,
         "limit_chunk_ids": limit_chunk_ids,
         "stage": stage,
+        "historical_incident_ids": (
+            list(historical_incident_ids) if historical_incident_ids is not None else []
+        ),
     }
 
 def append_audit_event(event:dict, path: Path):

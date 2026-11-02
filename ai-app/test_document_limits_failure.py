@@ -40,7 +40,7 @@ class DocumentLimitsFailureTest(unittest.TestCase):
             }),
             httpx.Response(200, json={
                 "application": "checkout",
-                "historical_incidents": [],
+                "historical_incidents": [{"historical_incident_id": "HIST-001"}],
             }),
             httpx.Response(200, json={
                 "application": "checkout",
@@ -87,6 +87,7 @@ class DocumentLimitsFailureTest(unittest.TestCase):
             "DOCUMENT_BASE_COMMUNICATION_FAILED",
         )
         self.assertEqual(event["stage"], "document_limits_lookup")
+        self.assertEqual(event["historical_incident_ids"], ["HIST-001"])
 
 
 if __name__ == "__main__":

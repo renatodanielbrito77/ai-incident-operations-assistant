@@ -103,6 +103,7 @@ def health():
 async def investigate(incident_id: str):
 
     stage = "incident_lookup"
+    historical_incident_ids = []
 
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
@@ -160,6 +161,9 @@ async def investigate(incident_id: str):
             )
             historical_response.raise_for_status()
             historical_incidents = historical_response.json()["historical_incidents"]
+            historical_incident_ids = [
+                incident["historical_incident_id"] for incident in historical_incidents
+            ]
 
             stage = "monitoring_lookup"
             
@@ -198,6 +202,7 @@ async def investigate(incident_id: str):
             retrieved_chunk_ids=[],
             limit_chunk_ids=[],
             stage=stage,
+            historical_incident_ids=historical_incident_ids,
         )
 
         await persist_audit_event(audit_event)
@@ -214,6 +219,7 @@ async def investigate(incident_id: str):
             retrieved_chunk_ids=[],
             limit_chunk_ids=[],
             stage=stage,
+            historical_incident_ids=historical_incident_ids,
         )
 
         await persist_audit_event(audit_event)
@@ -255,6 +261,7 @@ async def investigate(incident_id: str):
             retrieved_chunk_ids=[],
             limit_chunk_ids=[],
             stage=stage,
+            historical_incident_ids=historical_incident_ids,
         )
 
         await persist_audit_event(audit_event)
@@ -286,6 +293,7 @@ async def investigate(incident_id: str):
         incident_id=incident_data["incident_id"],
         analysis_code=decision["analysis_code"],
         stage="context_evaluation",
+        historical_incident_ids=historical_incident_ids,
         retrieved_chunk_ids=[
             item["chunk"]["chunk_id"] 
             for item in documentation
