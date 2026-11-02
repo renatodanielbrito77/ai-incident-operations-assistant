@@ -40,6 +40,10 @@ class DocumentLimitsFailureTest(unittest.TestCase):
             }),
             httpx.Response(200, json={
                 "application": "checkout",
+                "historical_incidents": [],
+            }),
+            httpx.Response(200, json={
+                "application": "checkout",
                 "status": "degraded",
                 "error_rate_percent": 1.0,
                 "latency_p95_ms": 900.0,
@@ -71,7 +75,7 @@ class DocumentLimitsFailureTest(unittest.TestCase):
             "detail": "Falha na comunicação com a base documental"
         })
 
-        self.assertEqual(mock_client.get.await_count, 3)
+        self.assertEqual(mock_client.get.await_count, 4)
         search_module.search_chunks.assert_called_once()
         search_module.get_document_limits.assert_called_once_with("RB-001")
 

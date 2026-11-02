@@ -35,6 +35,14 @@ class ApplicationLogs(BaseModel):
     application: str
     entries: list[LogEntry]
 
+class HistoricalIncident(BaseModel):
+    historical_incident_id: str
+    application: str
+    summary: str
+    symptoms: list[str]
+    resolution: str
+    observed_result: str
+
 class RunbookChunk(BaseModel):
     chunk_id: str
     document_id: str
@@ -52,6 +60,7 @@ class InvestigationContext(BaseModel):
     incident: Incident
     monitoring: Monitoring
     logs: ApplicationLogs
+    historical_incidents: list[HistoricalIncident]
     documentation: list[RetrievedDocument]
     document_limits: list[RunbookChunk]
     documentation_status: Literal["retrieved", "no_matches"]
@@ -143,6 +152,14 @@ async def investigate(incident_id: str):
                 }
 
             application = incident_data["application"]
+
+            stage = "historical_incidents_lookup"
+            historical_response = await client.get(
+                f"{MOCK_SERVICES_URL}/historical-incidents",
+                params={"application": application},
+            )
+            historical_response.raise_for_status()
+            historical_incidents = historical_response.json()["historical_incidents"]
 
             stage = "monitoring_lookup"
             
@@ -286,6 +303,7 @@ async def investigate(incident_id: str):
         "incident": incident_data,
         "monitoring": monitoring_data,
         "logs": logs_data,
+        "historical_incidents": historical_incidents,
         "documentation": documentation,
         "document_limits": document_limits,
         "documentation_status": documentation_status,
