@@ -2,6 +2,9 @@
 
 POC local para construir e entender, incrementalmente, uma aplicação de apoio à investigação de incidentes.
 
+Consulte a [arquitetura atual e o mapa dos módulos](docs/architecture.md) para os
+diagramas dos serviços, do fluxo de investigação e da preparação documental.
+
 ## Estado atual
 
 A aplicação recebe um identificador de incidente e consulta APIs com dados fictícios.
