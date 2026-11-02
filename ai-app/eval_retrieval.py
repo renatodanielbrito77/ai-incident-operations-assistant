@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+from eval_common import evaluate_expected_ids, print_summary
 
 
 CASES_PATH = Path(__file__).resolve().parent.parent / "evals" / "retrieval_cases.json"
@@ -44,9 +45,7 @@ def load_search():
 
 def evaluate_case(case, results):
     returned_ids = {result["chunk"]["chunk_id"] for result in results}
-    if case["expected_behavior"] == "retrieve":
-        return set(case["expected_chunk_ids"]).issubset(returned_ids)
-    return len(results) == 0
+    return evaluate_expected_ids(case, returned_ids)
 
 
 def run_cases(cases, search):
@@ -76,10 +75,7 @@ def run_cases(cases, search):
         print("Retornados:" if returned else "Retornados: []")
         for line in returned:
             print(line)
-    print(f"\nAprovados: {approved}/{len(cases)}")
-    print(f"Reprovados: {failed}")
-    print(f"Erros de execução: {errors}")
-    return 2 if errors else 1 if failed else 0
+    return print_summary(approved, failed, errors, len(cases))
 
 
 def main(cases_path=CASES_PATH):
