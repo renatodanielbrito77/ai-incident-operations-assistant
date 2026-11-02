@@ -40,6 +40,7 @@ class AuditEventIdTest(unittest.TestCase):
         self.audit_path = Path(directory.name) / "events.jsonl"
         self.main.AUDIT_PATH = self.audit_path
         self.append = Mock()
+        self.log_entries = []
         self.histories = [
             {
                 "historical_incident_id": historical_id,
@@ -81,7 +82,7 @@ class AuditEventIdTest(unittest.TestCase):
                 "error_rate_percent": 1.0,
                 "latency_p95_ms": 900.0,
             },
-            {"application": application, "entries": []},
+            {"application": application, "entries": self.log_entries},
         ]
         responses = [
             httpx.Response(
@@ -103,6 +104,10 @@ class AuditEventIdTest(unittest.TestCase):
             patch.object(self.main.httpx, "AsyncClient", return_value=self.http) as factory,
             patch.object(self.main, "append_audit_event", self.append),
             patch.object(
+                self.main, "match_historical_incidents",
+                wraps=self.main.match_historical_incidents,
+            ) as matcher,
+            patch.object(
                 self.main, "build_audit_event",
                 wraps=self.main.build_audit_event,
             ) as build,
@@ -110,6 +115,7 @@ class AuditEventIdTest(unittest.TestCase):
         ):
             response = client.post(f"/investigate/{incident_id}")
         factory.assert_called_once_with(timeout=5.0)
+        self.matcher = matcher
         build.assert_called_once()
         self.append.assert_called_once()
         self.append.assert_called_with(
@@ -176,6 +182,8 @@ class AuditEventIdTest(unittest.TestCase):
             f"{self.main.MOCK_SERVICES_URL}/incidents/INC-002"
         )
         self.assertNotIn("historical_incidents", response.json())
+        self.assertNotIn("historical_incident_matches", response.json())
+        self.matcher.assert_not_called()
         self.search.assert_not_called()
         self.limits.assert_not_called()
 
@@ -312,6 +320,68 @@ class AuditEventIdTest(unittest.TestCase):
                     self.assertEqual(self.http.get.await_args_list, calls[:index + 1])
                     self.search.assert_not_called()
                     self.limits.assert_not_called()
+
+    def load_history_and_log_fixtures(self, application):
+        spec = importlib.util.spec_from_file_location(
+            "mock_services_fixtures",
+            Path(__file__).resolve().parent.parent / "mock-services" / "main.py",
+        )
+        fixtures = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(fixtures)
+        self.histories = fixtures.historical_incidents
+        self.log_entries = fixtures.logs[application]["entries"]
+
+    def test_checkout_history_matches_response(self):
+        self.load_history_and_log_fixtures("checkout")
+        response = self.request()
+        self.assert_correlation(response, "CONTEXT_READY", "context_evaluation")
+        self.assertEqual(response.json()["historical_incidents"], self.histories[:2])
+        self.assertEqual(response.json()["historical_incident_matches"], [
+            {
+                "historical_incident": incident,
+                "matched_symptoms": ["Timeout while connecting to payment service"],
+            }
+            for incident in self.histories[:2]
+        ])
+        self.matcher.assert_called_once_with(self.histories[:2], self.log_entries)
+
+    def test_identity_match_preserves_no_documentation(self):
+        self.load_history_and_log_fixtures("identity")
+        self.search.return_value = []
+        response = self.request(incident_id="INC-003", application="identity")
+        self.assert_correlation(
+            response, "NO_DOCUMENTATION", "context_evaluation", "INC-003"
+        )
+        self.assertEqual(response.json()["analysis_code"], "NO_DOCUMENTATION")
+        self.assertEqual(response.json()["analysis_status"], "abstained")
+        self.assertEqual(response.json()["documentation"], [])
+        self.assertEqual(response.json()["historical_incidents"], self.histories[2:])
+        self.assertEqual(response.json()["historical_incident_matches"], [{
+            "historical_incident": self.histories[2],
+            "matched_symptoms": ["Password reset email delivery failed"],
+        }])
+
+    def test_no_matching_symptom_preserves_all_histories(self):
+        self.load_history_and_log_fixtures("checkout")
+        self.log_entries = [{
+            "timestamp": "2026-10-05T12:00:00Z", "level": "ERROR",
+            "message": "Timeout while connecting to payment service again",
+        }]
+        response = self.request()
+        self.assert_correlation(response, "CONTEXT_READY", "context_evaluation")
+        self.assertEqual(response.json()["historical_incident_matches"], [])
+        self.assertEqual(response.json()["historical_incidents"], self.histories[:2])
+
+    def test_response_retains_nonmatching_history(self):
+        self.load_history_and_log_fixtures("checkout")
+        self.histories[1] = {**self.histories[1], "symptoms": ["Outro sintoma"]}
+        response = self.request()
+        self.assert_correlation(response, "CONTEXT_READY", "context_evaluation")
+        self.assertEqual(response.json()["historical_incidents"], self.histories[:2])
+        self.assertEqual(response.json()["historical_incident_matches"], [{
+            "historical_incident": self.histories[0],
+            "matched_symptoms": ["Timeout while connecting to payment service"],
+        }])
 
     def test_multiple_documents_with_partial_limits(self):
         second_chunk = {

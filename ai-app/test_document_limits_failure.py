@@ -40,7 +40,9 @@ class DocumentLimitsFailureTest(unittest.TestCase):
             }),
             httpx.Response(200, json={
                 "application": "checkout",
-                "historical_incidents": [{"historical_incident_id": "HIST-001"}],
+                "historical_incidents": [{
+                    "historical_incident_id": "HIST-001", "symptoms": []
+                }],
             }),
             httpx.Response(200, json={
                 "application": "checkout",

@@ -6,6 +6,7 @@ from search_qdrant import search_chunks, get_document_limits
 from starlette.concurrency import run_in_threadpool
 from qdrant_client.http.exceptions import ResponseHandlingException
 from context_rules import evaluate_context
+from history_rules import match_historical_incidents
 from typing import Literal
 from audit import build_audit_event, append_audit_event
 from pathlib import Path
@@ -43,6 +44,10 @@ class HistoricalIncident(BaseModel):
     resolution: str
     observed_result: str
 
+class HistoricalIncidentMatch(BaseModel):
+    historical_incident: HistoricalIncident
+    matched_symptoms: list[str]
+
 class RunbookChunk(BaseModel):
     chunk_id: str
     document_id: str
@@ -61,6 +66,7 @@ class InvestigationContext(BaseModel):
     monitoring: Monitoring
     logs: ApplicationLogs
     historical_incidents: list[HistoricalIncident]
+    historical_incident_matches: list[HistoricalIncidentMatch]
     documentation: list[RetrievedDocument]
     document_limits: list[RunbookChunk]
     documentation_status: Literal["retrieved", "no_matches"]
@@ -229,6 +235,10 @@ async def investigate(incident_id: str):
             detail="Falha na conexão com Mock Services",
         ) from exc
 
+    historical_incident_matches = match_historical_incidents(
+        historical_incidents, logs_data["entries"]
+    )
+
     query = (
         f'Aplicação: {incident_data["application"]}. '
         f'Incidente: {incident_data["summary"]}. '
@@ -312,6 +322,7 @@ async def investigate(incident_id: str):
         "monitoring": monitoring_data,
         "logs": logs_data,
         "historical_incidents": historical_incidents,
+        "historical_incident_matches": historical_incident_matches,
         "documentation": documentation,
         "document_limits": document_limits,
         "documentation_status": documentation_status,
