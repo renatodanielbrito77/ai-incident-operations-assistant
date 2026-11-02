@@ -19,5 +19,26 @@
     "expected_chunk_ids": ["RB-001-03-02"],
     "expected_behavior": "retrieve",
     "reason": "A ressalva de dados insuficientes proíbe presumir indisponibilidade de pagamentos apenas porque o checkout registrou um timeout."
+  },
+  {
+    "case_id": "RET-004",
+    "query": "O checkout está estranho. Por onde começo a investigar?",
+    "expected_chunk_ids": ["RB-001-03-01"],
+    "expected_behavior": "retrieve",
+    "reason": "A lista de verificações orienta conferir escopo, logs, métricas e período antes de recomendar uma ação. A pergunta vaga não permite escolher uma intervenção específica."
+  },
+  {
+    "case_id": "RET-005",
+    "query": "Posso reiniciar automaticamente o checkout para resolver os timeouts?",
+    "expected_chunk_ids": ["RB-001-05"],
+    "expected_behavior": "retrieve",
+    "reason": "O trecho de limites declara que o runbook não autoriza reinícios ou outras mudanças automáticas. Recuperar a restrição não significa autorizar a ação."
+  },
+  {
+    "case_id": "RET-006",
+    "query": "Como configurar o backup de um banco PostgreSQL?",
+    "expected_chunk_ids": [],
+    "expected_behavior": "abstain",
+    "reason": "O runbook não contém procedimentos de configuração de backup de bancos de dados."
   }
 ]
