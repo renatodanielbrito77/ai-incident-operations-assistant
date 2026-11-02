@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 from uuid import uuid4
 import json
 from pathlib import Path
+from typing import Literal
 
 
 def build_audit_event(
@@ -11,6 +12,8 @@ def build_audit_event(
     limit_chunk_ids: list[str],
     stage: str = "unspecified",
     historical_incident_ids: list[str] | None = None,
+    matched_historical_incident_ids: list[str] | None = None,
+    historical_matching_status: Literal["not_evaluated", "evaluated"] = "not_evaluated",
 ):
     return {
         "event_id": str(uuid4()),
@@ -23,6 +26,11 @@ def build_audit_event(
         "historical_incident_ids": (
             list(historical_incident_ids) if historical_incident_ids is not None else []
         ),
+        "matched_historical_incident_ids": (
+            list(matched_historical_incident_ids)
+            if matched_historical_incident_ids is not None else []
+        ),
+        "historical_matching_status": historical_matching_status,
     }
 
 def append_audit_event(event:dict, path: Path):

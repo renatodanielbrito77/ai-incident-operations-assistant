@@ -110,6 +110,8 @@ async def investigate(incident_id: str):
 
     stage = "incident_lookup"
     historical_incident_ids = []
+    matched_historical_incident_ids = []
+    historical_matching_status = "not_evaluated"
 
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
@@ -238,6 +240,11 @@ async def investigate(incident_id: str):
     historical_incident_matches = match_historical_incidents(
         historical_incidents, logs_data["entries"]
     )
+    matched_historical_incident_ids = [
+        match["historical_incident"]["historical_incident_id"]
+        for match in historical_incident_matches
+    ]
+    historical_matching_status = "evaluated"
 
     query = (
         f'Aplicação: {incident_data["application"]}. '
@@ -272,6 +279,8 @@ async def investigate(incident_id: str):
             limit_chunk_ids=[],
             stage=stage,
             historical_incident_ids=historical_incident_ids,
+            matched_historical_incident_ids=matched_historical_incident_ids,
+            historical_matching_status=historical_matching_status,
         )
 
         await persist_audit_event(audit_event)
@@ -304,6 +313,8 @@ async def investigate(incident_id: str):
         analysis_code=decision["analysis_code"],
         stage="context_evaluation",
         historical_incident_ids=historical_incident_ids,
+        matched_historical_incident_ids=matched_historical_incident_ids,
+        historical_matching_status=historical_matching_status,
         retrieved_chunk_ids=[
             item["chunk"]["chunk_id"] 
             for item in documentation

@@ -137,6 +137,17 @@ class AuditEventIdTest(unittest.TestCase):
             record["historical_incident_id"]
             for record in response.json().get("historical_incidents", [])
         ])
+        self.assertEqual(event["matched_historical_incident_ids"], [
+            match["historical_incident"]["historical_incident_id"]
+            for match in response.json().get("historical_incident_matches", [])
+        ])
+        self.assertEqual(
+            event["historical_matching_status"],
+            "evaluated" if "historical_incident_matches" in response.json()
+            else "not_evaluated",
+        )
+        self.assertNotIn("matched_historical_incident_ids", response.json())
+        self.assertNotIn("historical_matching_status", response.json())
 
     def test_context_ready(self):
         response = self.request()
@@ -205,11 +216,14 @@ class AuditEventIdTest(unittest.TestCase):
         self.assertEqual(response.json(), {"detail": "Incident not found"})
         self.assertNotIn("audit_event_id", response.json())
         self.assertEqual(self.append.call_args.args[0]["historical_incident_ids"], [])
+        self.assertEqual(self.append.call_args.args[0]["matched_historical_incident_ids"], [])
+        self.assertEqual(self.append.call_args.args[0]["historical_matching_status"], "not_evaluated")
         self.assertEqual(self.http.get.await_count, 1)
         self.search.assert_not_called()
         self.limits.assert_not_called()
 
     def test_response_matches_real_audit_file(self):
+        self.load_history_and_log_fixtures("checkout")
         self.append = Mock(wraps=self.main.append_audit_event)
         response = self.request()
         self.assert_correlation(response, "CONTEXT_READY", "context_evaluation")
@@ -219,6 +233,8 @@ class AuditEventIdTest(unittest.TestCase):
         self.assertEqual(response.json()["audit_event_id"], event["event_id"])
         self.assertEqual(event, self.append.call_args.args[0])
         self.assertEqual(event["historical_incident_ids"], ["HIST-001", "HIST-002"])
+        self.assertEqual(event["matched_historical_incident_ids"], ["HIST-001", "HIST-002"])
+        self.assertEqual(event["historical_matching_status"], "evaluated")
 
     def test_identity_history_without_documentation(self):
         self.search.return_value = []
@@ -258,12 +274,15 @@ class AuditEventIdTest(unittest.TestCase):
                 self.assertEqual(event["incident_id"], "INC-001")
                 self.assertEqual(event["analysis_code"], code)
                 self.assertEqual(event["stage"], "historical_incidents_lookup")
+                self.assertEqual(event["matched_historical_incident_ids"], [])
+                self.assertEqual(event["historical_matching_status"], "not_evaluated")
                 self.assertEqual(event["historical_incident_ids"], [])
                 self.assertEqual(self.http.get.await_count, 2)
                 self.search.assert_not_called()
                 self.limits.assert_not_called()
 
     def test_documentation_search_failure(self):
+        self.load_history_and_log_fixtures("checkout")
         self.search.side_effect = ResponseHandlingException(
             RuntimeError("Falha documental simulada")
         )
@@ -276,6 +295,8 @@ class AuditEventIdTest(unittest.TestCase):
         self.assertEqual(event["incident_id"], "INC-001")
         self.assertEqual(event["analysis_code"], "DOCUMENT_BASE_COMMUNICATION_FAILED")
         self.assertEqual(event["stage"], "documentation_search")
+        self.assertEqual(event["matched_historical_incident_ids"], ["HIST-001", "HIST-002"])
+        self.assertEqual(event["historical_matching_status"], "evaluated")
         self.assertEqual(event["historical_incident_ids"], ["HIST-001", "HIST-002"])
         self.assertEqual(event["retrieved_chunk_ids"], [])
         self.assertEqual(event["limit_chunk_ids"], [])
@@ -311,6 +332,8 @@ class AuditEventIdTest(unittest.TestCase):
                     self.assertEqual(event["incident_id"], "INC-001")
                     self.assertEqual(event["analysis_code"], code)
                     self.assertEqual(event["stage"], stage)
+                    self.assertEqual(event["matched_historical_incident_ids"], [])
+                    self.assertEqual(event["historical_matching_status"], "not_evaluated")
                     self.assertEqual(
                         event["historical_incident_ids"],
                         [] if index == 0 else ["HIST-001", "HIST-002"],

@@ -41,7 +41,7 @@ class DocumentLimitsFailureTest(unittest.TestCase):
             httpx.Response(200, json={
                 "application": "checkout",
                 "historical_incidents": [{
-                    "historical_incident_id": "HIST-001", "symptoms": []
+                    "historical_incident_id": "HIST-001", "symptoms": ["Timeout simulado"]
                 }],
             }),
             httpx.Response(200, json={
@@ -52,7 +52,7 @@ class DocumentLimitsFailureTest(unittest.TestCase):
             }),
             httpx.Response(200, json={
                 "application": "checkout",
-                "entries": [],
+                "entries": [{"message": " TIMEOUT SIMULADO "}],
             }),
         ]
         for response in responses:
@@ -90,6 +90,8 @@ class DocumentLimitsFailureTest(unittest.TestCase):
         )
         self.assertEqual(event["stage"], "document_limits_lookup")
         self.assertEqual(event["historical_incident_ids"], ["HIST-001"])
+        self.assertEqual(event["matched_historical_incident_ids"], ["HIST-001"])
+        self.assertEqual(event["historical_matching_status"], "evaluated")
 
 
 if __name__ == "__main__":
