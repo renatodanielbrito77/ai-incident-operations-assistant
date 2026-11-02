@@ -90,6 +90,9 @@ def health():
     response_model=InvestigationContext | EscalationResponse,
 )
 async def investigate(incident_id: str):
+
+    stage = "incident_lookup"
+
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
             incident_response = await client.get(
@@ -136,6 +139,8 @@ async def investigate(incident_id: str):
 
             application = incident_data["application"]
 
+            stage = "monitoring_lookup"
+            
             monitoring_response = await client.get(
                 f"{MOCK_SERVICES_URL}/monitoring/{application}"
             )
@@ -148,6 +153,8 @@ async def investigate(incident_id: str):
 
             monitoring_response.raise_for_status()
             monitoring_data = monitoring_response.json()
+
+            stage = "logs_lookup"
 
             logs_response = await client.get(
                 f"{MOCK_SERVICES_URL}/logs/{application}"
@@ -168,6 +175,7 @@ async def investigate(incident_id: str):
             analysis_code="MOCK_SERVICES_TIMEOUT",
             retrieved_chunk_ids=[],
             limit_chunk_ids=[],
+            stage=stage,
         )
 
         await persist_audit_event(audit_event)
@@ -183,6 +191,7 @@ async def investigate(incident_id: str):
             analysis_code="MOCK_SERVICES_CONNECTION_FAILED",
             retrieved_chunk_ids=[],
             limit_chunk_ids=[],
+            stage=stage,
         )
 
         await persist_audit_event(audit_event)
@@ -199,6 +208,7 @@ async def investigate(incident_id: str):
     )
 
     try:
+        stage = "documentation_search"
         documentation = await run_in_threadpool(search_chunks, query)
 
         document_ids = {
@@ -209,6 +219,7 @@ async def investigate(incident_id: str):
         document_limits = []
 
         for document_id in sorted(document_ids):
+            stage = "document_limits_lookup"
             limits = await run_in_threadpool(
                 get_document_limits,
                 document_id,
@@ -221,6 +232,7 @@ async def investigate(incident_id: str):
             analysis_code="DOCUMENT_BASE_COMMUNICATION_FAILED",
             retrieved_chunk_ids=[],
             limit_chunk_ids=[],
+            stage=stage,
         )
 
         await persist_audit_event(audit_event)

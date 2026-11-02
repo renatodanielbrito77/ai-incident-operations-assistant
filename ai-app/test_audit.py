@@ -11,6 +11,7 @@ event = build_audit_event(
     analysis_code="CONTEXT_READY",
     retrieved_chunk_ids=["RB-001-02-01", "RB-001-03-02", "RB-001-04-02"],
     limit_chunk_ids=["RB-001-05"],
+    stage="context_evaluation",
 )
 
 print(json.dumps(event, ensure_ascii=False, indent=2))

@@ -9,6 +9,7 @@ def build_audit_event(
     analysis_code: str,
     retrieved_chunk_ids: list[str],
     limit_chunk_ids: list[str],
+    stage: str = "unspecified",
 ):
     return {
         "event_id": str(uuid4()),
@@ -17,6 +18,7 @@ def build_audit_event(
         "analysis_code": analysis_code,
         "retrieved_chunk_ids": retrieved_chunk_ids,
         "limit_chunk_ids": limit_chunk_ids,
+        "stage": stage,
     }
 
 def append_audit_event(event:dict, path: Path):

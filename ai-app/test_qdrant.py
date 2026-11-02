@@ -1,7 +1,10 @@
+import os
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams
 
-client = QdrantClient(url="http://localhost:6333")
+client = QdrantClient(
+    url=os.getenv("QDRANT_URL", "http://localhost:6333")
+)
 
 COLLECTION_NAME = "runbook_chunks"
 

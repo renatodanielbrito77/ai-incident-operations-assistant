@@ -1,4 +1,4 @@
-from retrieve_chunks import search_chunks
+from search_qdrant import search_chunks
 
 results = search_chunks("checkout lento ao consultar o serviço de pagamentos")
 

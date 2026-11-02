@@ -1,4 +1,5 @@
 import json
+import os
 from pathlib import Path
 from uuid import NAMESPACE_URL, uuid5
 
@@ -25,7 +26,9 @@ for chunk, vector in zip(chunks, vectors):
         payload=chunk,
     ))
 
-client = QdrantClient(url="http://localhost:6333")
+client = QdrantClient(
+    url=os.getenv("QDRANT_URL", "http://localhost:6333")
+)
 
 print(f"Registros preparados: {len(points)}")
 
