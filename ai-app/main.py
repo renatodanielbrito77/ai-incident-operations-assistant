@@ -105,6 +105,7 @@ async def investigate(incident_id: str):
                     analysis_code="INCIDENT_NOT_FOUND",
                     retrieved_chunk_ids=[],
                     limit_chunk_ids=[],
+                    stage="incident_lookup",
                 )
 
                 await persist_audit_event(audit_event)
@@ -124,6 +125,7 @@ async def investigate(incident_id: str):
                     analysis_code="P1_MANUAL_ESCALATION",
                     retrieved_chunk_ids=[],
                     limit_chunk_ids=[],
+                    stage="priority_check",
                 )
 
                 await persist_audit_event(audit_event)
@@ -263,6 +265,7 @@ async def investigate(incident_id: str):
     audit_event = build_audit_event(
         incident_id=incident_data["incident_id"],
         analysis_code=decision["analysis_code"],
+        stage="context_evaluation",
         retrieved_chunk_ids=[
             item["chunk"]["chunk_id"] 
             for item in documentation

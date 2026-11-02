@@ -30,11 +30,11 @@ flowchart LR
     end
 ```
 
-| Serviço | Acesso pelo host | Endereço usado dentro do Compose | Persistência |
-|---|---|---|---|
-| `ai-app` | `127.0.0.1:8000` | Porta `8000` | `audit-data` em `/app/audit` |
-| `mock-services` | `127.0.0.1:8001` | `http://mock-services:8000` | Dados fictícios em memória |
-| `vector-db` | `127.0.0.1:6333` | `http://vector-db:6333` | `qdrant-data` em `/qdrant/storage` |
+| Serviço         | Acesso pelo host | Endereço usado no Compose   | Persistência                  |
+|-----------------|------------------|-----------------------------|------------------------------------|
+| `ai-app`        | `127.0.0.1:8000` | Porta `8000`                | `audit-data` em `/app/audit`       |
+| `mock-services` | `127.0.0.1:8001` | `http://mock-services:8000` | Dados fictícios em memória         |
+| `vector-db`     | `127.0.0.1:6333` | `http://vector-db:6333`     | `qdrant-data` em `/qdrant/storage` |
 
 `ai-app` usa `MOCK_SERVICES_URL`, `QDRANT_URL` e `AUDIT_PATH`.
 Fora do Compose, os padrões no código são `http://localhost:8001`,
@@ -100,12 +100,12 @@ flowchart TD
     Persist --> Append
 ```
 
-| Módulo | Responsabilidade |
-|---|---|
-| `main.py` | Expõe `/health` e `/investigate/{incident_id}`; consulta o Mock Services, trata P1, recupera documentação, aplica regras e registra audit. Também define os modelos Pydantic das respostas. |
-| `search_qdrant.py` | Gera o vetor da consulta e busca os trechos com `query_points`; recupera a seção `Limites` de cada documento com `scroll` e filtros. |
-| `context_rules.py` | Retorna `NO_DOCUMENTATION`, `MISSING_DOCUMENT_LIMITS` ou `CONTEXT_READY`, conforme os documentos e seus limites. Não acessa rede ou disco. |
-| `audit.py` | Constrói eventos com UUID, timestamp UTC, incidente, código, IDs de chunks e etapa; acrescenta cada evento como uma linha JSON ao arquivo. |
+| Módulo                  | Responsabilidade |
+|-------------------------|---
+| `main.py`               | Expõe `/health` e `/investigate/{incident_id}`; consulta o Mock Services, trata P1, recupera documentação, aplica regras e registra audit. Também define os modelos Pydantic das respostas. |
+| `search_qdrant.py`      | Gera o vetor da consulta e busca os trechos com `query_points`; recupera a seção `Limites` de cada documento com `scroll` e filtros. |
+| `context_rules.py`      | Retorna `NO_DOCUMENTATION`, `MISSING_DOCUMENT_LIMITS` ou `CONTEXT_READY`, conforme os documentos e seus limites. Não acessa rede ou disco. |
+| `audit.py`              | Constrói eventos com UUID, timestamp UTC, incidente, código, IDs de chunks e etapa; acrescenta cada evento como uma linha JSON ao arquivo. |
 | `mock-services/main.py` | Expõe `/health`, `/incidents/{incident_id}`, `/monitoring/{application}` e `/logs/{application}`. |
 
 O modelo `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` e o cliente
@@ -138,13 +138,13 @@ conforme a tabela abaixo. A resposta de contexto inclui incidente, monitoring,
 logs, documentação, limites e resultado da avaliação. `CONTEXT_READY` indica
 suficiência segundo as regras da POC, sem afirmar causa raiz ou recomendar ações.
 
-| Evento | `stage` | HTTP |
-|---|---|---|
-| `INCIDENT_NOT_FOUND` | `incident_lookup` | `404` |
-| `P1_MANUAL_ESCALATION` | `priority_check` | `200` |
-| `MOCK_SERVICES_CONNECTION_FAILED` | Etapa ativa: `incident_lookup`, `monitoring_lookup` ou `logs_lookup` | `503` |
-| `MOCK_SERVICES_TIMEOUT` | Etapa ativa: `incident_lookup`, `monitoring_lookup` ou `logs_lookup` | `504` |
-| `DOCUMENT_BASE_COMMUNICATION_FAILED` | Etapa ativa: `documentation_search` ou `document_limits_lookup` | `503` |
+| Evento                                  | `stage`           | HTTP  |
+|-----------------------------------------|-------------------|-------|
+| `INCIDENT_NOT_FOUND`                    | `incident_lookup` | `404` |
+| `P1_MANUAL_ESCALATION`                  | `priority_check`  | `200` |
+| `MOCK_SERVICES_CONNECTION_FAILED`       | Etapa ativa: `incident_lookup`, `monitoring_lookup` ou `logs_lookup` | `503` |
+| `MOCK_SERVICES_TIMEOUT`                 | Etapa ativa: `incident_lookup`, `monitoring_lookup` ou `logs_lookup` | `504` |
+| `DOCUMENT_BASE_COMMUNICATION_FAILED`    | Etapa ativa: `documentation_search` ou `document_limits_lookup` | `503` |
 | Código retornado por `evaluate_context` | `context_evaluation` | `200` |
 
 Falha ao persistir audit retorna `503`. Monitoring ou logs inexistentes retornam
