@@ -1,0 +1,23 @@
+[
+  {
+    "case_id": "RET-001",
+    "query": "Checkout com timeouts recorrentes ao consultar pagamentos: o que verificar?",
+    "expected_chunk_ids": ["RB-001-04-02"],
+    "expected_behavior": "retrieve",
+    "reason": "A orientação de investigar a dependência indica consultar monitoring e logs de pagamentos quando há timeouts recorrentes acompanhados de degradação das métricas. A consulta não permite presumir essa degradação."
+  },
+  {
+    "case_id": "RET-002",
+    "query": "Como recuperar a senha de um usuário?",
+    "expected_chunk_ids": [],
+    "expected_behavior": "abstain",
+    "reason": "O runbook atual trata de checkout e comunicação com pagamentos; não contém orientação para recuperação de senha."
+  },
+  {
+    "case_id": "RET-003",
+    "query": "O timeout prova que pagamentos está indisponível?",
+    "expected_chunk_ids": ["RB-001-03-02"],
+    "expected_behavior": "retrieve",
+    "reason": "A ressalva de dados insuficientes proíbe presumir indisponibilidade de pagamentos apenas porque o checkout registrou um timeout."
+  }
+]
