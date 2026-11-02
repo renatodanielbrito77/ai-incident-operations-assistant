@@ -48,6 +48,7 @@ class RetrievedDocument(BaseModel):
     chunk: RunbookChunk
 
 class InvestigationContext(BaseModel):
+    audit_event_id: str
     incident: Incident
     monitoring: Monitoring
     logs: ApplicationLogs
@@ -63,6 +64,7 @@ class InvestigationContext(BaseModel):
     ]
     
 class EscalationResponse(BaseModel):
+    audit_event_id: str
     incident: Incident
     status: Literal["manual_escalation_required"]
     reason: str
@@ -131,6 +133,7 @@ async def investigate(incident_id: str):
                 await persist_audit_event(audit_event)
 
                 return {
+                    "audit_event_id": audit_event["event_id"],
                     "incident": incident_data,
                     "status": "manual_escalation_required",
                     "reason": (
@@ -279,6 +282,7 @@ async def investigate(incident_id: str):
     await persist_audit_event(audit_event)
 
     return {
+        "audit_event_id": audit_event["event_id"],
         "incident": incident_data,
         "monitoring": monitoring_data,
         "logs": logs_data,
