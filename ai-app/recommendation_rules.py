@@ -1,3 +1,28 @@
+def validate_candidate_action(candidate: dict) -> dict:
+    """Valida o tipo declarado, sem interpretar o texto nem autorizar execução.
+
+    Um texto contraditório ao action_type não é detectado aqui.
+    """
+    action_type = candidate.get("action_type")
+    if not isinstance(action_type, str):
+        return {
+            "allowed": False,
+            "validation_code": "UNKNOWN_ACTION_TYPE",
+        }
+    if action_type in {"observe", "request_verification"}:
+        return {
+            "allowed": True,
+            "validation_code": "ACTION_TYPE_ALLOWED",
+        }
+    return {
+        "allowed": False,
+        "validation_code": (
+            "ACTION_TYPE_FORBIDDEN" if action_type == "change_environment"
+            else "UNKNOWN_ACTION_TYPE"
+        ),
+    }
+
+
 def validate_candidate_references(
     candidate: dict,
     documentation: list[dict],
