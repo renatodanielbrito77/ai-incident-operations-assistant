@@ -1,0 +1,5 @@
+{
+  "text": "Solicitar verificação do monitoring e dos logs de pagamentos.",
+  "action_type": "request_verification",
+  "cited_chunk_ids": ["RB-001-04-02"]
+}

@@ -1,0 +1,5 @@
+{
+  "text": "Reiniciar automaticamente o checkout.",
+  "action_type": "change_environment",
+  "cited_chunk_ids": ["RB-001-05"]
+}

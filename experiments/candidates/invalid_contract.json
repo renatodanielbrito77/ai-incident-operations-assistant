@@ -1,0 +1,5 @@
+{
+  "text": 123,
+  "action_type": "request_verification",
+  "cited_chunk_ids": ["RB-001-04-02"]
+}
