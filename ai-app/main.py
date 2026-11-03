@@ -7,6 +7,7 @@ from starlette.concurrency import run_in_threadpool
 from qdrant_client.http.exceptions import ResponseHandlingException
 from context_rules import evaluate_context
 from history_rules import match_historical_incidents
+from evidence_rules import has_log_message
 from typing import Literal
 from audit import build_audit_event, append_audit_event
 from pathlib import Path
@@ -84,6 +85,14 @@ class EscalationResponse(BaseModel):
     status: Literal["manual_escalation_required"]
     reason: str
 
+class MissingLogMessageResponse(BaseModel):
+    audit_event_id: str
+    incident: Incident
+    status: Literal["additional_data_required"]
+    analysis_code: Literal["NO_LOG_MESSAGE"]
+    reason: str
+    requested_data: list[str]
+
 
 async def persist_audit_event(event: dict):
     try:
@@ -104,7 +113,7 @@ def health():
 
 @app.post(
     "/investigate/{incident_id}",
-    response_model=InvestigationContext | EscalationResponse,
+    response_model=InvestigationContext | EscalationResponse | MissingLogMessageResponse,
 )
 async def investigate(incident_id: str):
 
@@ -236,6 +245,32 @@ async def investigate(incident_id: str):
             status_code=503,
             detail="Falha na conexão com Mock Services",
         ) from exc
+
+    stage = "log_evidence_check"
+    if not has_log_message(logs_data["entries"]):
+        audit_event = build_audit_event(
+            incident_id=incident_data["incident_id"],
+            analysis_code="NO_LOG_MESSAGE",
+            retrieved_chunk_ids=[],
+            limit_chunk_ids=[],
+            stage=stage,
+            historical_incident_ids=historical_incident_ids,
+            matched_historical_incident_ids=matched_historical_incident_ids,
+            historical_matching_status=historical_matching_status,
+        )
+        await persist_audit_event(audit_event)
+        return {
+            "audit_event_id": audit_event["event_id"],
+            "incident": incident_data,
+            "status": "additional_data_required",
+            "analysis_code": "NO_LOG_MESSAGE",
+            "reason": "Nenhuma mensagem de log preenchida foi recebida.",
+            "requested_data": [
+                "Mensagem de log observada na aplicação afetada.",
+                "Data/hora e fuso ou intervalo em que o problema ocorreu.",
+                "Operação afetada, comportamento esperado e resultado observado.",
+            ],
+        }
 
     historical_incident_matches = match_historical_incidents(
         historical_incidents, logs_data["entries"]

@@ -40,7 +40,10 @@ class AuditEventIdTest(unittest.TestCase):
         self.audit_path = Path(directory.name) / "events.jsonl"
         self.main.AUDIT_PATH = self.audit_path
         self.append = Mock()
-        self.log_entries = []
+        self.log_entries = [{
+            "timestamp": "2026-10-05T12:00:00Z", "level": "INFO",
+            "message": "Registro fictício do incidente",
+        }]
         self.histories = [
             {
                 "historical_incident_id": historical_id,
@@ -61,6 +64,7 @@ class AuditEventIdTest(unittest.TestCase):
         self, priority="P2", incident_id="INC-001", missing=False,
         application="checkout", history_error=None,
         http_failure=None,
+        expect_audit=True,
     ):
         payloads = [
             {
@@ -104,6 +108,9 @@ class AuditEventIdTest(unittest.TestCase):
             patch.object(self.main.httpx, "AsyncClient", return_value=self.http) as factory,
             patch.object(self.main, "append_audit_event", self.append),
             patch.object(
+                self.main, "has_log_message", wraps=self.main.has_log_message,
+            ) as log_check,
+            patch.object(
                 self.main, "match_historical_incidents",
                 wraps=self.main.match_historical_incidents,
             ) as matcher,
@@ -116,6 +123,11 @@ class AuditEventIdTest(unittest.TestCase):
             response = client.post(f"/investigate/{incident_id}")
         factory.assert_called_once_with(timeout=5.0)
         self.matcher = matcher
+        self.log_check = log_check
+        if not expect_audit:
+            build.assert_not_called()
+            self.append.assert_not_called()
+            return response
         build.assert_called_once()
         self.append.assert_called_once()
         self.append.assert_called_with(
@@ -195,6 +207,7 @@ class AuditEventIdTest(unittest.TestCase):
         self.assertNotIn("historical_incidents", response.json())
         self.assertNotIn("historical_incident_matches", response.json())
         self.matcher.assert_not_called()
+        self.log_check.assert_not_called()
         self.search.assert_not_called()
         self.limits.assert_not_called()
 
@@ -405,6 +418,96 @@ class AuditEventIdTest(unittest.TestCase):
             "historical_incident": self.histories[0],
             "matched_symptoms": ["Timeout while connecting to payment service"],
         }])
+
+    def assert_missing_log_response(self, response):
+        self.assertEqual(response.status_code, 200)
+        event = self.append.call_args.args[0]
+        self.assertEqual(response.json(), {
+            "audit_event_id": event["event_id"],
+            "incident": {
+                "incident_id": "INC-001", "application": "checkout",
+                "priority": "P2", "summary": "Checkout lento",
+            },
+            "status": "additional_data_required",
+            "analysis_code": "NO_LOG_MESSAGE",
+            "reason": "Nenhuma mensagem de log preenchida foi recebida.",
+            "requested_data": [
+                "Mensagem de log observada na aplicação afetada.",
+                "Data/hora e fuso ou intervalo em que o problema ocorreu.",
+                "Operação afetada, comportamento esperado e resultado observado.",
+            ],
+        })
+        self.assertEqual(event["incident_id"], "INC-001")
+        self.assertEqual(event["analysis_code"], "NO_LOG_MESSAGE")
+        self.assertEqual(event["stage"], "log_evidence_check")
+        self.assertEqual(event["historical_incident_ids"], ["HIST-001", "HIST-002"])
+        self.assertEqual(event["matched_historical_incident_ids"], [])
+        self.assertEqual(event["historical_matching_status"], "not_evaluated")
+        self.assertEqual(event["retrieved_chunk_ids"], [])
+        self.assertEqual(event["limit_chunk_ids"], [])
+        self.assertEqual(self.http.get.await_count, 4)
+        self.matcher.assert_not_called()
+        self.search.assert_not_called()
+        self.limits.assert_not_called()
+
+    def test_empty_logs_request_additional_data(self):
+        self.log_entries = []
+        response = self.request()
+        self.assert_missing_log_response(response)
+
+    def test_blank_log_messages_request_additional_data(self):
+        self.log_entries = [
+            {"timestamp": "2026-10-05T12:00:00Z", "level": "ERROR", "message": message}
+            for message in ("", " ", "\t\n")
+        ]
+        response = self.request()
+        self.assert_missing_log_response(response)
+
+    def test_one_message_among_blank_logs_continues_investigation(self):
+        self.log_entries = [
+            {"timestamp": "2026-10-05T12:00:00Z", "level": "INFO", "message": message}
+            for message in ("", " Registro preenchido ", "\t")
+        ]
+        response = self.request()
+        self.assert_correlation(response, "CONTEXT_READY", "context_evaluation")
+        self.matcher.assert_called_once()
+        self.search.assert_called_once()
+
+    def test_missing_log_audit_failure_preserves_503(self):
+        self.log_entries = []
+        self.append = Mock(side_effect=OSError("Falha simulada"))
+        response = self.request()
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.json(), {
+            "detail": "Não foi possível registrar a investigação no audit"
+        })
+        self.matcher.assert_not_called()
+        self.search.assert_not_called()
+        self.limits.assert_not_called()
+        self.assertFalse(self.audit_path.exists())
+
+    def test_missing_log_response_matches_real_temporary_audit(self):
+        self.log_entries = []
+        self.append = Mock(wraps=self.main.append_audit_event)
+        response = self.request()
+        self.assert_missing_log_response(response)
+        lines = self.audit_path.read_text(encoding="utf-8").splitlines()
+        self.assertEqual(len(lines), 1)
+        event = json.loads(lines[0])
+        self.assertEqual(response.json()["audit_event_id"], event["event_id"])
+        self.assertEqual(event, self.append.call_args.args[0])
+
+    def test_logs_http_failure_does_not_become_missing_message(self):
+        self.log_entries = []
+        # O caminho 404 de logs não grava evento no comportamento existente.
+        response = self.request(http_failure=(3, httpx.Response(
+            404, request=httpx.Request("GET", "http://mock.test/logs/checkout")
+        )), expect_audit=False)
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.json(), {"detail": "Logs not found"})
+        self.log_check.assert_not_called()
+        self.matcher.assert_not_called()
+        self.search.assert_not_called()
 
     def test_multiple_documents_with_partial_limits(self):
         second_chunk = {
