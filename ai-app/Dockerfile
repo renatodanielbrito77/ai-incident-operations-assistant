@@ -7,6 +7,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY main.py .
 
+COPY investigation_models.py .
+
 COPY search_qdrant.py .
 
 COPY context_rules.py .
