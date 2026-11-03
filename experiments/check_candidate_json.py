@@ -11,6 +11,7 @@ sys.path.insert(0, str(ROOT / "ai-app"))
 from pydantic import ValidationError
 from recommendation_models import RecommendationCandidate, CandidateStructureReport
 from recommendation_structure import check_candidate_structure
+from recommendation_report import render_candidate_report
 
 
 CHUNKS_PATH = ROOT / "data" / "chunks.json"
@@ -41,15 +42,15 @@ def validation_details(exc):
     ]
 
 
-def show_error(code, details):
+def show_error(code, details, message="Avaliação estrutural não concluída; nenhum relatório emitido."):
     print(json.dumps({
         "error": code, "details": details,
-        "message": "Avaliação estrutural não concluída; nenhum relatório emitido.",
+        "message": message,
     }, ensure_ascii=False, indent=2))
     return 2
 
 
-def run(candidate_path, chunks_path=CHUNKS_PATH):
+def run(candidate_path, chunks_path=CHUNKS_PATH, report_path=None):
     try:
         raw = Path(candidate_path).read_text(encoding="utf-8")
     except (OSError, UnicodeError) as exc:
@@ -73,7 +74,18 @@ def run(candidate_path, chunks_path=CHUNKS_PATH):
         report = CandidateStructureReport.model_validate(result)
     except ValidationError as exc:
         return show_error("REPORT_CONTRACT_ERROR", validation_details(exc))
-    print(json.dumps({
+    if report_path is not None:
+        markdown = render_candidate_report(candidate, report, documentation, limits)
+        try:
+            with Path(report_path).open("x", encoding="utf-8") as output:
+                output.write(markdown)
+        except (OSError, UnicodeError) as exc:
+            return show_error(
+                "REPORT_WRITE_ERROR", str(exc),
+                "Avaliação estrutural concluída, mas a gravação do Markdown não foi confirmada. "
+                "Um arquivo novo pode ter ficado incompleto; arquivos preexistentes não são sobrescritos.",
+            )
+    output_data = {
         "candidate": candidate.model_dump(),
         "context": {
             "documentation_chunk_ids": [DOCUMENTATION_ID],
@@ -81,15 +93,22 @@ def run(candidate_path, chunks_path=CHUNKS_PATH):
         },
         "report": report.model_dump(),
         "notice": "Verificações estruturais não comprovam suporte semântico nem autorizam execução. Nenhuma ação foi executada.",
-    }, ensure_ascii=False, indent=2))
+    }
+    if report_path is not None:
+        output_data["markdown_report_path"] = str(report_path)
+    print(json.dumps(output_data, ensure_ascii=False, indent=2))
     return 0 if report.structural_checks_passed else 1
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--candidate", required=True, type=Path)
+    parser.add_argument(
+        "--report", type=Path,
+        help="Caminho de um novo Markdown; o diretório deve existir e arquivos existentes não são sobrescritos.",
+    )
     args = parser.parse_args()
-    return run(args.candidate)
+    return run(args.candidate, report_path=args.report)
 
 
 if __name__ == "__main__":

@@ -4,6 +4,8 @@ import io
 import json
 from pathlib import Path
 import tempfile
+import subprocess
+import sys
 import unittest
 from unittest.mock import patch
 
@@ -152,6 +154,125 @@ class CheckCandidateJsonTest(unittest.TestCase):
         self.run_data(data)
         self.assertEqual(data, original)
         self.assertEqual((path.read_bytes(), script.CHUNKS_PATH.read_bytes()), before)
+
+    def test_without_report_option_does_not_render_or_add_path(self):
+        with patch.object(script, "render_candidate_report") as renderer:
+            code, output = self.run_file(EXAMPLES / "request_verification.json")
+        self.assertEqual(code, 0)
+        self.assertNotIn("markdown_report_path", output)
+        renderer.assert_not_called()
+
+    def test_writes_same_generator_output_for_pass_and_rejection(self):
+        for name, expected in (("request_verification.json", 0), ("change_environment.json", 1)):
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as directory:
+                path = Path(directory) / "report.md"
+                documentation, limits = script.load_example_context(script.CHUNKS_PATH)
+                with (
+                    patch.object(script, "load_example_context", return_value=(documentation, limits)) as loader,
+                    patch.object(script, "check_candidate_structure", wraps=script.check_candidate_structure) as checker,
+                    patch.object(script, "render_candidate_report", wraps=script.render_candidate_report) as renderer,
+                ):
+                    code, output = self.run_file(EXAMPLES / name, report_path=path)
+                self.assertEqual(code, expected)
+                self.assertEqual(output["markdown_report_path"], str(path))
+                loader.assert_called_once_with(script.CHUNKS_PATH)
+                renderer.assert_called_once()
+                candidate, report, rendered_docs, rendered_limits = renderer.call_args.args
+                self.assertIs(checker.call_args.args[1], documentation)
+                self.assertIs(checker.call_args.args[2], limits)
+                self.assertIs(rendered_docs, documentation)
+                self.assertIs(rendered_limits, limits)
+                self.assertEqual(report.model_dump(), output["report"])
+                self.assertEqual(path.read_text(encoding="utf-8"), script.render_candidate_report(
+                    candidate, report, documentation, limits
+                ))
+                self.assertIn("Sustentação semântica não avaliada.", path.read_text(encoding="utf-8"))
+                if expected == 1:
+                    self.assertIn("Candidata rejeitada", path.read_text(encoding="utf-8"))
+                    self.assertIn("ACTION_TYPE_FORBIDDEN", path.read_text(encoding="utf-8"))
+
+    def test_invalid_candidate_never_opens_output_or_renders(self):
+        for name, error in (("malformed.json", "JSON_INVALID"), ("invalid_contract.json", "CONTRACT_INVALID")):
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as directory:
+                path = Path(directory) / "report.md"
+                with patch.object(script, "render_candidate_report") as renderer:
+                    code, output = self.run_file(EXAMPLES / name, report_path=path)
+                self.assertEqual(code, 2)
+                self.assertEqual(output["error"], error)
+                self.assertFalse(path.exists())
+                renderer.assert_not_called()
+                path.write_text("Relatório anterior", encoding="utf-8")
+                self.run_file(EXAMPLES / name, report_path=path)
+                self.assertEqual(path.read_text(encoding="utf-8"), "Relatório anterior")
+
+    def test_context_or_report_contract_error_creates_no_markdown(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "report.md"
+            with patch.object(script, "load_example_context", side_effect=ValueError("Chunk ausente")):
+                code, output = self.run_file(EXAMPLES / "request_verification.json", report_path=path)
+            self.assertEqual(code, 2)
+            self.assertEqual(output["error"], "CONTEXT_ERROR")
+            self.assertFalse(path.exists())
+            with patch.object(script, "check_candidate_structure", return_value={}):
+                code, output = self.run_file(EXAMPLES / "request_verification.json", report_path=path)
+            self.assertEqual(code, 2)
+            self.assertEqual(output["error"], "REPORT_CONTRACT_ERROR")
+            self.assertFalse(path.exists())
+
+    def test_existing_destination_is_preserved(self):
+        for name in ("request_verification.json", "change_environment.json"):
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as directory:
+                path = Path(directory) / "report.md"
+                path.write_text("Conteúdo anterior", encoding="utf-8")
+                code, output = self.run_file(EXAMPLES / name, report_path=path)
+                self.assertEqual(code, 2)
+                self.assertEqual(output["error"], "REPORT_WRITE_ERROR")
+                self.assertEqual(path.read_text(encoding="utf-8"), "Conteúdo anterior")
+                self.assertNotIn("markdown_report_path", output)
+
+    def test_missing_directory_is_not_created(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "missing" / "report.md"
+            code, output = self.run_file(EXAMPLES / "request_verification.json", report_path=path)
+            self.assertEqual(code, 2)
+            self.assertEqual(output["error"], "REPORT_WRITE_ERROR")
+            self.assertFalse(path.parent.exists())
+
+    def test_failure_during_write_is_operational_even_for_rejection(self):
+        for name in ("request_verification.json", "change_environment.json"):
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as directory:
+                path = Path(directory) / "report.md"
+                original_open = Path.open
+                def failing_open(current_path, *args, **kwargs):
+                    handle = original_open(current_path, *args, **kwargs)
+                    if current_path == path and args and args[0] == "x":
+                        from unittest.mock import MagicMock
+                        wrapped = MagicMock()
+                        wrapped.__enter__.return_value = wrapped
+                        wrapped.write.side_effect = OSError("Disco cheio simulado")
+                        wrapped.__exit__.side_effect = lambda *unused: handle.close()
+                        return wrapped
+                    return handle
+                with patch.object(Path, "open", failing_open):
+                    code, output = self.run_file(EXAMPLES / name, report_path=path)
+                self.assertEqual(code, 2)
+                self.assertEqual(output["error"], "REPORT_WRITE_ERROR")
+                self.assertIn("Disco cheio simulado", output["details"])
+                self.assertIn("gravação do Markdown não foi confirmada", output["message"])
+
+    def test_cli_with_temporary_destinations(self):
+        for name, expected in (("request_verification.json", 0), ("change_environment.json", 1)):
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as directory:
+                path = Path(directory) / "report.md"
+                result = subprocess.run([
+                    sys.executable, "-B", str(Path(script.__file__)),
+                    "--candidate", str(EXAMPLES / name), "--report", str(path),
+                ], capture_output=True, text=True, timeout=10)
+                self.assertEqual(result.returncode, expected, result.stderr)
+                output = json.loads(result.stdout)
+                self.assertEqual(output["markdown_report_path"], str(path))
+                self.assertTrue(path.is_file())
+                self.assertIn("not_evaluated", path.read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":
