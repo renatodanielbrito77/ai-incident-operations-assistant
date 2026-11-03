@@ -1,11 +1,14 @@
 # AI Incident Operations Assistant
 
 POC local para aprender e construir, incrementalmente, uma aplicação de apoio à
-investigação de incidentes. O fluxo é determinístico: reúne evidências atuais,
-históricos e documentação, verifica limites e registra o resultado em audit.
+investigação de incidentes. A investigação é determinística: reúne evidências
+atuais, históricos e documentação, verifica limites e registra o resultado em
+audit. Uma CLI experimental pode compor esse contexto com geração local de
+candidata pelo Ollama e relatório para revisão humana, fora da API.
 
 Consulte a [arquitetura e o mapa dos módulos](docs/architecture.md) para os
-contratos, diagramas e detalhes do tratamento de falhas.
+contratos, diagramas e detalhes do tratamento de falhas. A [revisão da V1](docs/v1-review.md)
+registra o escopo demonstrado, evidências de validação, limites e pendências de V2.
 
 ## Funcionalidades atuais
 
@@ -20,12 +23,19 @@ contratos, diagramas e detalhes do tratamento de falhas.
 - Decide entre contexto pronto e abstenção por ausência de documentação ou limites.
 - Persiste eventos JSONL e retorna `audit_event_id` para correlacionar respostas
   de negócio ao evento correspondente.
-- Possui testes isolados, avaliações de busca e de contexto documental final, além
-  de experimentos separados de representação dos chunks.
+- Monta um pacote validado sem importar a API ou carregar embeddings no processo
+  da CLI; P1, falta de logs e abstenções são inelegíveis para geração.
+- Gera candidata local somente para pacote elegível e verifica formato, referências
+  e tipo de ação declarado; gera relatório de passagem ou rejeição estrutural.
+- Possui testes isolados, avaliações de recuperação e de estrutura de candidatas,
+  além de experimentos de embeddings, instruções e julgamento semântico.
 
-Não há LLM ou geração automática de recomendações. Históricos são experiências
-passadas, não autorização para repetir uma resolução. Nenhuma ação corretiva ou
-notificação de escalonamento é executada.
+A API de investigação não chama LLM nem retorna candidata. A geração pela CLI
+é experimental: passagem estrutural não comprova sustentação semântica nem
+autoriza execução. A revisão humana do conteúdo é obrigatória para seu uso,
+sem workflow de aprovação persistida implementado. Históricos são experiências
+passadas, não autorização para repetir uma resolução. Nenhuma ação corretiva
+ou notificação de escalonamento é executada.
 
 ## Estrutura
 
@@ -37,10 +47,13 @@ notificação de escalonamento é executada.
 ├── data/                    # Chunks e embeddings preparados em arquivo
 ├── docs/
 │   ├── architecture.md
+│   ├── v1-review.md         # Revisão de escopo, demonstração e limitações
 │   └── runbooks/            # Documentação fictícia de investigação
 ├── evals/
-│   └── retrieval_cases.json # Seis expectativas de recuperação
-└── experiments/             # Scripts e relatório; não substituem o índice oficial
+│   ├── retrieval_cases.json # Seis expectativas de recuperação
+│   ├── candidate_cases.json # Quatro expectativas estruturais de candidatas
+│   └── claim_examples.json  # Três afirmações com revisão humana e rastreabilidade
+└── experiments/             # CLI, geração, juiz, embeddings, testes e relatórios
 ```
 
 ## Executar com Docker Compose
@@ -181,6 +194,43 @@ adicional dedicado a logs vazios. Esse cenário é coberto por testes isolados.
 Os resultados documentais dependem do índice e do modelo; não são valores
 codificados por incidente na AI App.
 
+## CLI experimental: investigação, candidata e relatório
+
+[investigate_and_report.py](experiments/investigate_and_report.py) chama a API
+existente, reutiliza a montagem do pacote e o executor
+[send_package_to_ollama.py](experiments/send_package_to_ollama.py). Não importa
+`main.py`, não recalcula regras estruturais nem chama o juiz semântico.
+
+Somente pacote `ready` permite uma chamada ao Ollama. A CLI usa as instruções
+oficiais de `llm_input_models.py`, política `1.0`, e os parâmetros atuais do
+executor: `qwen3:1.7b`, contexto `4096`, saída máxima `256`, temperatura `0`,
+timeout de geração `120` s e `truncate/shift/think/stream=false`. O timeout da
+investigação é `30` s. Não há reparo, repetição ou ajuste automático de limites.
+As instruções revisadas e o orçamento `512` de outros experimentos não foram
+promovidos automaticamente.
+
+Opções: `--incident-id`, `--output-dir` (diretório novo), `--api-url` e
+`--ollama-url`. No container, `127.0.0.1` aponta para ele mesmo; na rede Compose
+usar `http://ai-app:8000` e, para Ollama no Mac, `http://host.docker.internal:11434`.
+O modelo precisa estar instalado e os serviços/base preparados previamente.
+O roteiro para INC-002, INC-003 e INC-001, com imagem existente e sem reinício,
+está em [Como demonstrar a V1](docs/v1-review.md#2-como-demonstrar).
+
+| Estado final | Código | Significado |
+|---|---:|---|
+| `STRUCTURAL_CHECKS_PASSED` | 0 | Candidata para revisão humana |
+| `NOT_ELIGIBLE` | 0 | P1, falta de logs ou abstenção; sem LLM e sem candidata |
+| `STRUCTURAL_CHECKS_FAILED` | 1 | Candidata bem formada rejeitada por referências/política |
+| `INVESTIGATION_FAILED`, `CONTEXT_INVALID`, `GENERATION_FAILED`, `ARTIFACT_FAILED` | 2 | Erro, identificado também por etapa e motivo |
+
+**Código 0 não significa candidata produzida:** consultar `final_state` e
+`candidate_produced`. A CLI preserva entrada, respostas brutas, parâmetros,
+resultado e `report.md` em diretório novo. Somente candidata e relatório
+estrutural válidos usam `render_candidate_report`; erros e inelegibilidade têm
+resumo próprio, sem fabricar esses objetos. O relatório usa apenas os chunks
+citados disponíveis no contexto, sem buscar conteúdo para completar referências.
+`semantic_support_status` permanece `not_evaluated`.
+
 ## Audit e falhas
 
 Cada evento contém UUID `event_id`, timestamp UTC, incidente, `analysis_code`,
@@ -195,6 +245,11 @@ As três respostas de negócio incluem `audit_event_id`, reutilizando o ID do ev
 após a persistência. Respostas de erro não expõem esse campo. Falha de gravação
 interrompe o retorno com HTTP 503. O armazenamento é JSONL em volume; não há
 `fsync`, API de consulta do audit ou garantia de durabilidade contra queda abrupta.
+
+A CLI preserva esse mesmo ID na resposta, no pacote e nos artefatos posteriores.
+A API grava os eventos normais das investigações; a CLI não acrescenta eventos
+de geração ou relatório ao JSONL. Modelo e parâmetros ficam nos artefatos, não
+no audit da API. A correlação existe, mas não é um audit integral do fluxo posterior.
 
 | HTTP | Tratamento implementado |
 |---|---|
@@ -219,13 +274,42 @@ docker run --rm --network none \
   python -B -m unittest -v \
   test_evidence_rules test_history_rules test_audit_historical_ids \
   test_audit_event_id test_document_limits_failure \
-  test_eval_retrieval test_eval_document_context
+  test_llm_input_package test_eval_retrieval test_eval_document_context \
+  test_eval_candidates test_recommendation_models test_recommendation_rules \
+  test_recommendation_actions test_recommendation_structure test_recommendation_report
 ```
 
 O nome da imagem acima corresponde ao nome padrão deste projeto no Compose;
 confira `docker compose images` se usar outro nome de projeto. Os testes de API
 substituem `search_qdrant` antes da importação, evitando carregar embeddings.
 A persistência é simulada ou usa JSONL em diretório temporário, sem o volume real.
+Essa é uma seleção explícita; resultados anteriores por entrega não constituem
+certificação de toda a suíte atual em uma única execução.
+
+Para os componentes experimentais, executar seleções separadas, sem rede:
+
+```bash
+docker run --rm --network none \
+  --mount "type=bind,source=$PWD,target=/workspace,readonly" \
+  --workdir /workspace/experiments ai-incident-operations-assistant-ai-app \
+  python -B -m unittest -q test_investigate_and_report test_send_package_to_ollama
+
+docker run --rm --network none \
+  --mount "type=bind,source=$PWD,target=/workspace,readonly" \
+  --workdir /workspace/experiments ai-incident-operations-assistant-ai-app \
+  python -B -m unittest -q test_judge_claim_examples test_send_package_to_ollama
+
+docker run --rm --network none \
+  --mount "type=bind,source=$PWD,target=/workspace,readonly" \
+  --workdir /workspace/experiments ai-incident-operations-assistant-ai-app \
+  python -B -m unittest -q test_check_candidate_json
+```
+
+As entregas da CLI e do juiz registraram, respectivamente, 40 e 41 testes
+passando; ambos os grupos incluem os mesmos 20 do transporte, portanto não são
+81 testes únicos. São testes com HTTP/geração simulados, não chamadas ao Ollama
+nem medição de qualidade semântica. O [mapa de testes](docs/architecture.md#testes-isolados)
+relaciona as responsabilidades.
 
 Para os testes isolados do Mock, use a mesma imagem, que já contém HTTPX:
 
@@ -274,18 +358,54 @@ docker compose run --rm --no-deps --pull never \
 Esses executores usam a rede e carregam o modelo, mas não importam a API nem gravam
 audit. Não são os testes unitários com funções simuladas descritos acima.
 
+## Avaliação estrutural de candidatas
+
+[eval_candidates.py](ai-app/eval_candidates.py) usa os quatro casos de
+[candidate_cases.json](evals/candidate_cases.json). Monta cada contexto somente
+com os IDs declarados, valida candidata e relatório e compara o relatório completo
+com a expectativa. Exibe a anotação humana separadamente, sem avaliá-la por LLM.
+CAND-003 pode atender à expectativa estrutural e continuar contradizendo o texto
+citado. Expectativa atendida não significa aprovação da candidata.
+
+Esse avaliador lê os chunks locais, sem rede, API, Qdrant ou audit. Distingue
+expectativa não atendida de erro global ou por caso. Os resultados semânticos
+experimentais descritos adiante não alteram suas expectativas.
+
 ## Experimentos e limites da POC
 
 A comparação de conteúdo versus títulos e conteúdo está registrada no
 [relatório experimental](experiments/chunk_embedding_comparison_report.md).
 A decisão registrada é manter o índice oficial `runbook_chunks`. Os scripts de
-`experiments/` são separados do fluxo da API; a comparação gera embeddings e cria
-coleções próprias com nomes únicos, sem excluir as preexistentes. A contagem de
-tokens não gera embeddings.
+`experiments/` são separados do fluxo da API; `compare_chunk_embeddings.py` gera
+embeddings e cria coleções próprias com nomes únicos, sem excluir as preexistentes.
+A contagem de tokens não gera embeddings.
 
-A POC usa dados fictícios, um runbook e apenas seis casos de avaliação. O filtro de
+Outros registros separados incluem a [geração com instruções e orçamentos distintos](experiments/ollama_candidate_experiments_report.md),
+a [validação real da CLI](experiments/investigate_and_report_validation.md) e a
+[revisão por afirmação](experiments/ollama_candidate_claim_review.md).
+As integrações reais não substituem testes isolados; as taxas das coleções A/C
+experimentais não são resultados atuais do índice oficial.
+
+O [juiz semântico experimental](experiments/claim_judge_experiment_report.md)
+usa os três exemplos de [claim_examples.json](evals/claim_examples.json), ocultando
+anotações humanas da entrada e comparando rótulos só após saída válida. Confere
+source_id e pointer contra a evidência efetivamente enviada; a candidata não pode
+ser citada como evidência de si mesma. Foram duas saídas válidas, uma concordância
+e uma divergência, além de uma saída rejeitada. Isso não demonstra confiabilidade
+nem permite uma taxa geral de qualidade; não é aprovação automática e o juiz não
+é acionado pela CLI. Os testes garantem formato/rastreabilidade, não correção da
+justificativa ou resistência a instruções maliciosas nos dados.
+
+A POC usa dados fictícios, um runbook e apenas seis casos de recuperação. O filtro de
 históricos é por aplicação, sem busca semântica. Texto de log preenchido não
-comprova relevância ou causa raiz; não há correlação temporal validada. Não há
-LLM, geração de respostas, ações corretivas automáticas ou integração com AWS e
-Kubernetes. Uma evolução futura deve ser avaliada separadamente e manter esses
-limites explícitos.
+comprova relevância ou causa raiz; não há correlação temporal validada. A geração
+local pode omitir condições, usar suporte não citado ou produzir afirmações
+imprecisas apesar da passagem estrutural. Não há ações corretivas automáticas ou
+integração com AWS/Kubernetes. Dependências não fixadas, carregamento de modelos,
+recursos do Mac, ausência de healthchecks e retenção temporária de artefatos são
+limitações operacionais conhecidas. A revisão humana permanece necessária.
+
+A [revisão da V1](docs/v1-review.md) separa limites aceitos de lacunas e melhorias
+opcionais. A comparação determinístico versus agentic e o exercício de demanda
+de Negócios continuam pendentes de V2; não há comparação entregue ou aceite formal
+de uma demanda operacional demonstrado.
