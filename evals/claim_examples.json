@@ -1,0 +1,169 @@
+{
+  "schema_version": "1.0",
+  "annotation_scope": "Anotações humanas discutidas na revisão; validação deste arquivo verifica somente estrutura e correspondência com os artefatos, sem julgamento semântico automático.",
+  "source_runs": {
+    "E3": {
+      "model": "qwen3:1.7b",
+      "audit_event_id": "afc36a70-04a9-4039-9631-d8820c2f115c",
+      "completed_at": "2026-11-03T18:26:10.155274Z",
+      "num_ctx": 4096,
+      "num_predict": 512,
+      "candidate": {
+        "text": "Fatos observados: O incidente ocorreu no aplicativo checkout, com status de degradação e taxa de erros de 12.5%. Houve logs de erro e aviso de latência elevada. Os timeouts foram registrados em 2026-10-05T12:00:00Z e 2026-10-05T12:00:05Z. O monitoring indicou latência p95 de 1800 ms. Os dados do histórico mostram que há similaridades em problemas de timeout e latência elevada, mas não foi comprovado que a configuração seja a única causa. Verificações sugeridas: Solicitar verificação do status do serviço de pagamentos e da configuração do pool de conexões. Não há dados suficientes para concluir a causa raiz.",
+        "action_type": "request_verification",
+        "cited_chunk_ids": [
+          "RB-001-02-01",
+          "RB-001-03-02",
+          "RB-001-04-02"
+        ]
+      },
+      "artifacts_directory": "/private/tmp/ollama-output512.StxEYv/run",
+      "artifact_sha256": {
+        "candidate.json": "9c35cf96a15fbfede5623bb3032cd4e29655f4f47b1536ca242ca7a4b2b3630e",
+        "package.json": "2f9b6b6ac115b8d55a5fb7a26fdc634e343f6c1728e6706b219fb0ac9b9db8de",
+        "request.json": "15fa58db194d15caede487d4032f42e7125d442c452461cfdfd17144dacadf15",
+        "result.json": "2ad4ef30629828580cd96288710a497f7ac23e4aa5ee546e71b27d06ad1aae1a"
+      },
+      "report_reference": "experiments/ollama_candidate_experiments_report.md#1-conclusão-da-geração",
+      "reference_note": "E3 é o identificador da execução já documentada, não um novo identificador de audit. Caminhos de artefatos são locais e temporários; a candidata completa está preservada neste JSON."
+    }
+  },
+  "examples": [
+    {
+      "source_run_id": "E3",
+      "model": "qwen3:1.7b",
+      "audit_event_id": "afc36a70-04a9-4039-9631-d8820c2f115c",
+      "candidate_reference": "#/source_runs/E3/candidate",
+      "candidate_cited_chunk_ids": [
+        "RB-001-02-01",
+        "RB-001-03-02",
+        "RB-001-04-02"
+      ],
+      "automated_semantic_support_status": "not_evaluated",
+      "example_id": "CLAIM-001",
+      "statement_fragment": "O monitoring indicou latência p95 de 1800 ms.",
+      "candidate_text_span": {
+        "start": 239,
+        "end": 284
+      },
+      "statement_interpretation": {
+        "type": "current_fact",
+        "text": "A latência p95 observada no monitoring atual é 1800 ms."
+      },
+      "origin": "current_evidence",
+      "available_evidence": [
+        {
+          "source_type": "monitoring",
+          "source_id": "INC-001",
+          "source_file": "package.json",
+          "json_pointer": "/evidence/monitoring/latency_p95_ms",
+          "value": 1800.0
+        }
+      ],
+      "citation_review": {
+        "related_cited_chunk_ids": [
+          "RB-001-02-01"
+        ],
+        "available_but_uncited_chunk_ids": [],
+        "reason": "O chunk citado descreve latência elevada como sintoma, mas não informa o valor atual. Esse valor é demonstrado pelo monitoring."
+      },
+      "human_review": {
+        "classification": "sustentado",
+        "reason": "A métrica atual demonstra exatamente o valor afirmado."
+      }
+    },
+    {
+      "source_run_id": "E3",
+      "model": "qwen3:1.7b",
+      "audit_event_id": "afc36a70-04a9-4039-9631-d8820c2f115c",
+      "candidate_reference": "#/source_runs/E3/candidate",
+      "candidate_cited_chunk_ids": [
+        "RB-001-02-01",
+        "RB-001-03-02",
+        "RB-001-04-02"
+      ],
+      "automated_semantic_support_status": "not_evaluated",
+      "example_id": "CLAIM-002",
+      "statement_fragment": "Solicitar verificação do status do serviço de pagamentos",
+      "candidate_text_span": {
+        "start": 466,
+        "end": 522
+      },
+      "statement_interpretation": {
+        "type": "suggestion",
+        "text": "Solicitar a verificação do status do serviço de pagamentos."
+      },
+      "origin": "runbook",
+      "available_evidence": [
+        {
+          "source_type": "runbook",
+          "source_id": "RB-001-04-02",
+          "source_file": "package.json",
+          "json_pointer": "/evidence/documentation/2/chunk/content",
+          "excerpt": "Quando houver timeouts recorrentes acompanhados de degradação das métricas, recomendar a consulta ao monitoring e aos logs do serviço de pagamentos."
+        },
+        {
+          "source_type": "current_logs",
+          "source_id": "INC-001",
+          "source_file": "package.json",
+          "json_pointer": "/evidence/logs/entries/0/message",
+          "excerpt": "Timeout while connecting to payment service",
+          "observation": "O recorte contém uma única entrada explícita de timeout; isso não comprova recorrência."
+        }
+      ],
+      "citation_review": {
+        "related_cited_chunk_ids": [
+          "RB-001-04-02"
+        ],
+        "available_but_uncited_chunk_ids": [],
+        "reason": "A orientação citada existe, mas sua condição de recorrência não está demonstrada no recorte."
+      },
+      "human_review": {
+        "classification": "impreciso",
+        "reason": "A sugestão omite a condição de recorrência e não explicita a consulta aos logs de pagamentos."
+      }
+    },
+    {
+      "source_run_id": "E3",
+      "model": "qwen3:1.7b",
+      "audit_event_id": "afc36a70-04a9-4039-9631-d8820c2f115c",
+      "candidate_reference": "#/source_runs/E3/candidate",
+      "candidate_cited_chunk_ids": [
+        "RB-001-02-01",
+        "RB-001-03-02",
+        "RB-001-04-02"
+      ],
+      "automated_semantic_support_status": "not_evaluated",
+      "example_id": "CLAIM-003",
+      "statement_fragment": "e da configuração do pool de conexões.",
+      "candidate_text_span": {
+        "start": 523,
+        "end": 561
+      },
+      "statement_interpretation": {
+        "type": "suggestion",
+        "text": "Solicitar verificação da configuração do pool de conexões."
+      },
+      "origin": "historical_incident",
+      "available_evidence": [
+        {
+          "source_type": "historical_incident",
+          "source_id": "HIST-001",
+          "source_file": "package.json",
+          "json_pointer": "/evidence/historical_incidents/0/resolution",
+          "excerpt": "A equipe reverteu uma alteração recente no pool de conexões do checkout."
+        }
+      ],
+      "citation_review": {
+        "related_cited_chunk_ids": [],
+        "available_but_uncited_chunk_ids": [],
+        "reason": "Nenhum chunk citado orienta verificar o pool. O histórico registra uma resolução passada."
+      },
+      "human_review": {
+        "classification": "não sustentado",
+        "reason": "A resolução histórica, sozinha, não fundamenta essa sugestão para o incidente atual; isso não demonstra que a verificação seja proibida ou inútil."
+      },
+      "statement_context": "Complemento ligado a \"Solicitar verificação\" na mesma frase da candidata; sua interpretação como sugestão está registrada separadamente."
+    }
+  ]
+}
