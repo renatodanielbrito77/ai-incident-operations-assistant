@@ -1,0 +1,115 @@
+{
+  "contexts": [
+    {
+      "context_id": "CTX-PAYMENTS-001",
+      "documentation_chunk_ids": ["RB-001-04-02"],
+      "document_limit_chunk_ids": ["RB-001-05"]
+    }
+  ],
+  "cases": [
+    {
+      "case_id": "CAND-001",
+      "context_id": "CTX-PAYMENTS-001",
+      "candidate": {
+        "text": "Solicitar verificação do monitoring e dos logs de pagamentos quando houver timeouts recorrentes acompanhados de degradação das métricas.",
+        "action_type": "request_verification",
+        "cited_chunk_ids": ["RB-001-04-02"]
+      },
+      "expected_structure": {
+        "references": {
+          "accepted": true,
+          "validation_code": "REFERENCES_IN_CONTEXT",
+          "invalid_chunk_ids": []
+        },
+        "action": {
+          "allowed": true,
+          "validation_code": "ACTION_TYPE_ALLOWED"
+        },
+        "structural_checks_passed": true,
+        "semantic_support_status": "not_evaluated"
+      },
+      "human_semantic_annotation": {
+        "assessment": "compatible",
+        "reason": "A candidata preserva a condição de timeouts recorrentes com degradação das métricas e solicita a verificação de monitoring e logs indicada pelo trecho citado."
+      }
+    },
+    {
+      "case_id": "CAND-002",
+      "context_id": "CTX-PAYMENTS-001",
+      "candidate": {
+        "text": "Reiniciar automaticamente o checkout para resolver o incidente.",
+        "action_type": "change_environment",
+        "cited_chunk_ids": ["RB-001-05"]
+      },
+      "expected_structure": {
+        "references": {
+          "accepted": true,
+          "validation_code": "REFERENCES_IN_CONTEXT",
+          "invalid_chunk_ids": []
+        },
+        "action": {
+          "allowed": false,
+          "validation_code": "ACTION_TYPE_FORBIDDEN"
+        },
+        "structural_checks_passed": false,
+        "semantic_support_status": "not_evaluated"
+      },
+      "human_semantic_annotation": {
+        "assessment": "contradicts",
+        "reason": "O trecho citado declara que o runbook não autoriza reinícios ou outras mudanças automáticas, contrariando a ação proposta."
+      }
+    },
+    {
+      "case_id": "CAND-003",
+      "context_id": "CTX-PAYMENTS-001",
+      "candidate": {
+        "text": "Reiniciar automaticamente o checkout para resolver o incidente.",
+        "action_type": "observe",
+        "cited_chunk_ids": ["RB-001-05"]
+      },
+      "expected_structure": {
+        "references": {
+          "accepted": true,
+          "validation_code": "REFERENCES_IN_CONTEXT",
+          "invalid_chunk_ids": []
+        },
+        "action": {
+          "allowed": true,
+          "validation_code": "ACTION_TYPE_ALLOWED"
+        },
+        "structural_checks_passed": true,
+        "semantic_support_status": "not_evaluated"
+      },
+      "human_semantic_annotation": {
+        "assessment": "contradicts",
+        "reason": "O texto recomenda reinício automático, embora declare observe. Também contradiz a restrição do chunk citado. As regras estruturais não detectam essas contradições."
+      }
+    },
+    {
+      "case_id": "CAND-004",
+      "context_id": "CTX-PAYMENTS-001",
+      "candidate": {
+        "text": "Solicitar verificação do monitoring e dos logs de pagamentos.",
+        "action_type": "request_verification",
+        "cited_chunk_ids": ["RB-001-03-01"]
+      },
+      "expected_structure": {
+        "references": {
+          "accepted": false,
+          "validation_code": "REFERENCES_OUTSIDE_CONTEXT",
+          "invalid_chunk_ids": ["RB-001-03-01"]
+        },
+        "action": {
+          "allowed": true,
+          "validation_code": "ACTION_TYPE_ALLOWED"
+        },
+        "structural_checks_passed": false,
+        "semantic_support_status": "not_evaluated"
+      },
+      "human_semantic_annotation": {
+        "assessment": "not_verifiable_in_context",
+        "reason": "A referência citada está fora do contexto fornecido. Não é possível verificar a sustentação da candidata por essa citação sem buscar conteúdo adicional, o que não faz parte desta avaliação."
+      }
+    }
+  ]
+}
