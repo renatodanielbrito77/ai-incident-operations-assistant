@@ -197,6 +197,17 @@ class DocumentControl:
         if investigation['analysis_code'] == 'CONTEXT_READY' and (not docs or not docs <= limits):
             raise DocumentIntegrityError("Contexto pronto sem Limites da mesma versão")
         # Reutiliza integralmente elegibilidade, política e instruções da V1.
+        # Fluxo V2 temporal explícito; chamadas anteriores mantêm o caminho original.
+        if investigation.get('investigation_schema_version') == '2.0':
+            from investigation_v2_models import InvestigationContextV2, InvestigationPackageV2
+            evidence = InvestigationContextV2.model_validate(investigation, strict=True)
+            projection = {name: investigation[name] for name in ClassifiedContext.model_fields}
+            legacy = build_llm_input_package(projection)
+            if legacy.status != 'ready':
+                return legacy
+            value = legacy.package.model_dump()
+            value['evidence'] = evidence.model_dump()
+            return InvestigationPackageV2.model_validate(value, strict=True)
         legacy = build_llm_input_package(investigation)
         if legacy.status != 'ready':
             return legacy
